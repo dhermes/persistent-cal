@@ -1,0 +1,9 @@
+application: persistent-cal
+version: 0-1
+runtime: python
+api_version: 1 # only existing version
+
+handlers:
+# precedence should be noted for any wildcards
+- url: /.*
+  script: main.py
