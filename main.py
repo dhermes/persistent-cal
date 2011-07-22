@@ -14,6 +14,14 @@ class MainHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, {}))
 
 
+class VerifyHandler(webapp.RequestHandler):
+  """Handles / as well as redirects for login required"""
+  def get(self):
+    path = os.path.join(os.path.dirname(__file__),
+                        'googlef7560eebc24762bb.html')
+    self.response.out.write(template.render(path, {}))
+
+
 class Throw404(webapp.RequestHandler):
   """Catches all non-specified (404) requests"""
   def get(self):
@@ -23,6 +31,7 @@ class Throw404(webapp.RequestHandler):
 
 
 application = webapp.WSGIApplication([
+  ('/googlef7560eebc24762bb.html', VerifyHandler),
   ('/', MainHandler),
   ('/.*', Throw404),
   ], debug=True)
