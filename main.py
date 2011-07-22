@@ -1,6 +1,8 @@
 import os
+import urllib2
 
 import gdata
+import icalendar
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
