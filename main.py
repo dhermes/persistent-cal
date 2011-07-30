@@ -18,8 +18,10 @@ from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
 from google.appengine.ext.webapp.util import run_wsgi_app
 
+from models import Event
 from secret_key import CONSUMER_KEY
 from secret_key import CONSUMER_SECRET
+
 
 class MainHandler(webapp.RequestHandler):
   """Handles / as well as redirects for login required"""
@@ -80,14 +82,14 @@ class Fetcher(webapp.RequestHandler):
     # user to be sent after they have granted us
     # access. Sometimes, developers generate different URLs
     # based on the environment. You want to set this value to
-    # "http://localhost:8080/step2" if you are running the
+    # "http://localhost:8080/verify" if you are running the
     # development server locally.
 
     # We also provide the data scope(s). In general, we want
     # to limit the scope as much as possible. For this
     # example, we just ask for access to all feeds.
     scopes = SETTINGS['SCOPES']
-    oauth_callback = 'http://%s/step2' % self.request.host
+    oauth_callback = 'http://%s/verify' % self.request.host
     consumer_key = SETTINGS['CONSUMER_KEY']
     consumer_secret = SETTINGS['CONSUMER_SECRET']
 #     request_token = gdocs.get_oauth_token(scopes, oauth_callback,
@@ -157,7 +159,7 @@ application = webapp.WSGIApplication([
   ### EXAMPLE ###
   ###############
   ('/step1', Fetcher),
-  ('/step2', RequestTokenCallback),
+  ('/verify', RequestTokenCallback),
   ###############
   ###############
   ('/googlef7560eebc24762bb.html', VerifyHandler),
