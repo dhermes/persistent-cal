@@ -77,7 +77,7 @@ request_token = gcal.get_oauth_token(scopes, oauth_callback,
 # go to https://www.google.com/accounts/b/0/OAuthAuthorizeToken?
 #           hd=default&oauth_token=<request_token.token>
 # then authorize then click accept and copy over the query_params
-q_params = '?oauth_verifier=m2QP-EkuqdcOv9-oBsvYZNcm&oauth_token=4%2FAXFXfkiSPM8XFjeSDDDoS1370RJo'
+q_params = '?oauth_verifier=YOPXUEaGgfaWPDbw6cMYhgko&oauth_token=4%2F90TvjZW4WaTxNWGcnCu3ombri-an'
 gdata.gauth.authorize_request_token(request_token, '%s%s' % (oauth_callback, q_params))
 gcal.auth_token = gcal.get_access_token(request_token)
 
@@ -101,3 +101,60 @@ for i, an_event in enumerate(feed.entry):
       print '\t\t\t%s' % (a_participant.attendee_status.value,)
     else:
       print '\t\t\t%s' % ('No status',)
+
+
+#############################
+# daniel.j.hermes@gmail.com #
+#############################
+# {'auth_state': 1,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '4/BSbwDH19fWTYuT0iRchcnut9EjHz',
+#  'token_secret': 'anWqxwuuhqazbbwpcX_1teT2',
+#  'verifier': None}
+
+# ?oauth_verifier=cs-aI1nEkhyqHjVg5InR1q1X&oauth_token=4%2FBSbwDH19fWTYuT0iRchcnut9EjHz
+
+# {'auth_state': 2,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '4/BSbwDH19fWTYuT0iRchcnut9EjHz',
+#  'token_secret': 'anWqxwuuhqazbbwpcX_1teT2',
+#  'verifier': 'cs-aI1nEkhyqHjVg5InR1q1X'}
+
+# {'auth_state': 3,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
+#  'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
+#  'verifier': None}
+
+############################
+# dhermes@bossylobster.com #
+############################
+# {'auth_state': 1,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '4/90TvjZW4WaTxNWGcnCu3ombri-an',
+#  'token_secret': 'ZyedHs0am9Z8MqrsCbZN678d',
+#  'verifier': None}
+
+# {'auth_state': 2,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '4/90TvjZW4WaTxNWGcnCu3ombri-an',
+#  'token_secret': 'ZyedHs0am9Z8MqrsCbZN678d',
+#  'verifier': 'YOPXUEaGgfaWPDbw6cMYhgko'}
+
+# {'auth_state': 3,
+#  'consumer_key': 'persistent-cal.appspot.com',
+#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+#  'next': None,
+#  'token': '1/iLuG70qpK2UZu0Ct9hQrGeV_L-OMEXbUZs5tIo5wWjs',
+#  'token_secret': 'TIHutZun2wQiJiG7DnrU0KdH',
+#  'verifier': None}

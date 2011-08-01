@@ -4,14 +4,7 @@ import simplejson
 from urllib2 import urlopen
 from urllib2 import urlparse
 
-###############
-### EXAMPLE ###
-###############
 import gdata.gauth
-# import gdata.docs.client
-###############
-###############
-# import gdata
 import gdata.calendar.client
 from icalendar import Calendar
 
@@ -57,17 +50,23 @@ def pickle_event(event):
                'when:to': event.get('dtend').dt,
                'summary': unicode(event.get('summary')),
                'location': unicode(event.get('location')),
-               'description': '%s\n\n%s\n%s' % (
-                   unicode(event.get('description')),
-                   '====================', uid)}
+               'description': unicode(event.get('description'))}
+#                'description': '%s\n\n%s\n%s' % (
+#                    unicode(event.get('description')),
+#                    '====================', uid)}
   return uid, pickle.dumps(to_pickle)
 
 
 class MainHandler(webapp.RequestHandler):
   """Handles / as well as redirects for login required"""
   def get(self):
+    current_user = users.get_current_user()
+    id_ = current_user.user_id() if current_user is not None else 'be'
+    sign_out = users.create_logout_url(self.request.uri)
+
     path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
-    self.response.out.write(template.render(path, {}))
+    self.response.out.write(template.render(path, {'id': id_,
+                                                   'sign_out': sign_out}))
 
 
 class VerifyHandler(webapp.RequestHandler):
@@ -85,26 +84,9 @@ class Throw404(webapp.RequestHandler):
     path = os.path.join(os.path.dirname(__file__), 'templates', '404.html')
     self.response.out.write(template.render(path, {}))
 
-###############
-### EXAMPLE ###
-###############
-
-# Constants included for ease of understanding. It is a more common
-# and reliable practice to create a helper for reading a Consumer Key
-# and Secret from a config file. You may have different consumer keys
-# and secrets for different environments, and you also may not want to
-# check these values into your source code repository.
-SETTINGS = {
-    'APP_NAME': 'persistent-cal',
-    'CONSUMER_KEY': CONSUMER_KEY,
-    'CONSUMER_SECRET': CONSUMER_SECRET,
-    # 'SCOPES': ['https://docs.google.com/feeds/']
-    'SCOPES': ['https://www.google.com/calendar/feeds/'],
-    }
 
 # Create an instance of the DocsService to make API calls
-gcal = gdata.calendar.client.CalendarClient(source = SETTINGS['APP_NAME'])
-# gdocs = gdata.docs.client.DocsClient(source = SETTINGS['APP_NAME'])
+gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
 
 class Fetcher(webapp.RequestHandler):
 
@@ -128,24 +110,28 @@ class Fetcher(webapp.RequestHandler):
     # We also provide the data scope(s). In general, we want
     # to limit the scope as much as possible. For this
     # example, we just ask for access to all feeds.
-    scopes = SETTINGS['SCOPES']
-    oauth_callback = 'http://%s/verify' % self.request.host
-    consumer_key = SETTINGS['CONSUMER_KEY']
-    consumer_secret = SETTINGS['CONSUMER_SECRET']
-#     request_token = gdocs.get_oauth_token(scopes, oauth_callback,
-#                                           consumer_key, consumer_secret)
-    request_token = gcal.get_oauth_token(scopes, oauth_callback,
-                                         consumer_key, consumer_secret)
+    access_token_key = 'access_token_%s' % current_user.user_id()
+    request_token = gdata.gauth.ae_load(access_token_key)
+    if request_token is None:
+      request_token_key = 'request_token_%s' % current_user.user_id()
+      scopes = ['https://www.google.com/calendar/feeds/']
+      oauth_callback = 'http://%s/verify' % self.request.host
+      consumer_key = CONSUMER_KEY
+      consumer_secret = CONSUMER_SECRET
+      request_token = gcal.get_oauth_token(scopes, oauth_callback,
+                                           consumer_key, consumer_secret)
 
-    # Persist this token in the datastore.
-    request_token_key = 'request_token_%s' % current_user.user_id()
-    gdata.gauth.ae_save(request_token, request_token_key)
+      # Persist this token in the datastore.
+      gdata.gauth.ae_save(request_token, request_token_key)
 
-    # Generate the authorization URL.
-    approval_page_url = request_token.generate_authorization_url()
+      # Generate the authorization URL.
+      approval_page_url = request_token.generate_authorization_url()
 
-    message = '<a href="%s">Request token for the Google Calendar Scope</a>'
-    self.response.out.write(message % approval_page_url)
+      message = '<a href="%s">Request token for the Google Calendar Scope</a>'
+      self.response.out.write(message % approval_page_url)
+    else:
+      message = '<a href="%s">You have already granted access</a>'
+      self.response.out.write(message % '/started')
 
 
 class RequestTokenCallback(webapp.RequestHandler):
@@ -161,24 +147,28 @@ class RequestTokenCallback(webapp.RequestHandler):
     # Remember the token that we stashed? Let's get it back from
     # datastore now and adds information to allow it to become an
     # access token.
-    request_token_key = 'request_token_%s' % current_user.user_id()
-    request_token = gdata.gauth.ae_load(request_token_key)
-    gdata.gauth.authorize_request_token(request_token, self.request.uri)
+    access_token_key = 'access_token_%s' % current_user.user_id()
+    request_token = gdata.gauth.ae_load(access_token_key)
+    if request_token is None:
+      request_token_key = 'request_token_%s' % current_user.user_id()
+      request_token = gdata.gauth.ae_load(request_token_key)
+      gdata.gauth.authorize_request_token(request_token, self.request.uri)
+      auth_token_key = 'auth_token_%s' % current_user.user_id()
+      gdata.gauth.ae_save(request_token, auth_token_key)
 
-    # We can now upgrade our authorized token to a long-lived
-    # access token by associating it with gdocs client, and
-    # calling the get_access_token method.
-    if gcal.auth_token is None:
+      # We can now upgrade our authorized token to a long-lived
+      # access token by associating it with gcal client, and
+      # calling the get_access_token method.
       gcal.auth_token = gcal.get_access_token(request_token)
 
-    # Note that we want to keep the access token around, as it
-    # will be valid for all API calls in the future until a user
-    # revokes our access. For example, it could be populated later
-    # from reading from the datastore or some other persistence
-    # mechanism.
-    access_token_key = 'access_token_%s' % current_user.user_id()
-    gdata.gauth.ae_save(request_token, access_token_key)
+      # Note that we want to keep the access token around, as it
+      # will be valid for all API calls in the future until a user
+      # revokes our access. For example, it could be populated later
+      # from reading from the datastore or some other persistence
+      # mechanism.
+      gdata.gauth.ae_save(request_token, access_token_key)
 
+    # Always moving on
     message = '<a href="%s">Let\'s get started</a>'
     self.response.out.write(message % '/started')
 
@@ -192,6 +182,10 @@ class StartedHandler(webapp.RequestHandler):
 
     # Finally fetch the document list and print document title in
     # the response
+    access_token_key = 'access_token_%s' % current_user.user_id()
+    request_token = gdata.gauth.ae_load(access_token_key)
+    gcal.auth_token = request_token
+
     feed = gcal.GetAllCalendarsFeed()
     calendars = []
     for i, a_calendar in enumerate(feed.entry):
@@ -250,23 +244,26 @@ class CalendarHandler(webapp.RequestHandler):
       query.start_min = start_date
       query.start_max = end_date
       feed = gcal.GetCalendarEventFeed(uri=uri, q=query)
+      # if len(feed.entry) == 50:
+      # use feed.GetNextLink().href
       calendar = []
       for i, an_event in enumerate(feed.entry):
-        description = an_event.content.text
-        if description is None:
-          continue
+        calendar.append((i, str(val)))
+#         description = an_event.content.text
+#         if description is None:
+#           continue
 
-        for ending in uid_endings:
-          if description.endswith(ending):
-            val = {'when:from': an_event.when[0].start
-                       if an_event.when else None,
-                   'when:to': an_event.when[0].end
-                       if an_event.when else None,
-                   'summary': an_event.title.text,
-                   'location': an_event.where[0].value
-                       if an_event.where else None,
-                   'description': description}
-            calendar.append((i, str(val)))
+#         for ending in uid_endings:
+#           if description.endswith(ending):
+#             val = {'when:from': an_event.when[0].start
+#                        if an_event.when else None,
+#                    'when:to': an_event.when[0].end
+#                        if an_event.when else None,
+#                    'summary': an_event.title.text,
+#                    'location': an_event.where[0].value
+#                        if an_event.where else None,
+#                    'description': description}
+#             calendar.append((i, str(val)))
 
       path = os.path.join(os.path.dirname(__file__),
                           'templates',
@@ -276,7 +273,19 @@ class CalendarHandler(webapp.RequestHandler):
       path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
       self.response.out.write(template.render(path, {}))
 
-    
+# event = gdata.calendar.data.CalendarEventEntry()
+# event.title = atom.data.Title(text=title)
+# event.content = atom.data.Content(text=content)
+# where='On the courts'
+# event.where.append(gdata.calendar.data.CalendarWhere(value=where))
+# %Y-%m-%dT%H:%M:%S.000Z
+# start_time = time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+# .... returns '2011-07-31T23:44:54.000Z' (in UTC)
+# whereas my things have format
+# 2011-08-01T08:00:00.000-07:00
+# event.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+# new_event = calendar_client.InsertEvent(event)
+
 application = webapp.WSGIApplication([
   ###############
   ### EXAMPLE ###
