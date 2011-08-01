@@ -4,6 +4,15 @@
     <title>Persistent Calendar</title>
   </head>
   <body>
-    Hello {{ id }} <a href="{{ sign_out }}">Sign out</a>
+    Hello {{ id }}
+    {% if granted %}
+    Thanks for signing up, please provide the link for the calendar you wish to update with
+    <form action="/" method="post">
+      <input type="text" name="calendar-link" />
+      <input type="submit" value="Submit" />
+    </form>
+    {% else %}
+    Please <a href="{{ link }}">grant access</a>
+    {% endif %}
   </body>
 </html>

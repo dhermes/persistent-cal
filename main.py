@@ -1,137 +1,128 @@
+# General libraries
 import os
 import pickle
 import simplejson
 from urllib2 import urlopen
 from urllib2 import urlparse
 
+# Third-party libraries
+import atom
 import gdata.gauth
 import gdata.calendar.client
 from icalendar import Calendar
 
+# App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
 from google.appengine.ext.webapp.util import run_wsgi_app
 
+# App specific libraries
 from models import Event
+from models import UserCal
 from secret_key import CONSUMER_KEY
 from secret_key import CONSUMER_SECRET
 
-
-def date_datetime_compare(val1, val2):
-  if type(val1) == type(val2):
-    return cmp(val1, val2)
-
-  from datetime import datetime, date
-  if val1.year != val2.year:
-    return cmp(val1.year, val2.year)
-
-  if val1.month != val2.month:
-    return cmp(val1.month, val2.month)
-
-  if val1.day != val2.day:
-    return cmp(val1.day, val2.day)
-
-  # We know same day, year and month, so val1 is 00:00:00
-  if type(val1) == date and type(val2) == datetime:
-    return -1
-  elif type(val1) == datetime and type(val2) == date:
-    return 1
-  else:
-    raise Exception("Bad data")
+# Create an instance of the DocsService to make API calls
+GCAL = gdata.calendar.client.CalendarClient(source='persistent-cal')
 
 
-def pickle_event(event):
+def parse_event(event):
   # all events have a UID, and almost all begin with 'item-';
   # those that don't are an away event for the entire trip
   uid = unicode(event.get('uid'))
-  to_pickle = {'when:from': event.get('dtstart').dt,
-               'when:to': event.get('dtend').dt,
-               'summary': unicode(event.get('summary')),
-               'location': unicode(event.get('location')),
-               'description': unicode(event.get('description'))}
-#                'description': '%s\n\n%s\n%s' % (
-#                    unicode(event.get('description')),
-#                    '====================', uid)}
-  return uid, pickle.dumps(to_pickle)
+  event_data = {'when:from': event.get('dtstart').dt,
+                'when:to': event.get('dtend').dt,
+                'summary': unicode(event.get('summary')),
+                'location': unicode(event.get('location')),
+                'description': unicode(event.get('description'))}
+  return uid, event_data
 
 
 class MainHandler(webapp.RequestHandler):
-  """Handles / as well as redirects for login required"""
-  def get(self):
-    current_user = users.get_current_user()
-    id_ = current_user.user_id() if current_user is not None else 'be'
-    sign_out = users.create_logout_url(self.request.uri)
-
-    path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
-    self.response.out.write(template.render(path, {'id': id_,
-                                                   'sign_out': sign_out}))
-
-
-class VerifyHandler(webapp.RequestHandler):
-  """Handles / as well as redirects for login required"""
-  def get(self):
-    path = os.path.join(os.path.dirname(__file__),
-                        'googlef7560eebc24762bb.html')
-    self.response.out.write(template.render(path, {}))
-
-
-class Throw404(webapp.RequestHandler):
-  """Catches all non-specified (404) requests"""
-  def get(self):
-    self.error(404)
-    path = os.path.join(os.path.dirname(__file__), 'templates', '404.html')
-    self.response.out.write(template.render(path, {}))
-
-
-# Create an instance of the DocsService to make API calls
-gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
-
-class Fetcher(webapp.RequestHandler):
 
   @login_required
   def get(self):
     """This handler is responsible for fetching an initial OAuth
     request token and redirecting the user to the approval page."""
 
+    # gauranteed to be a user since login_required
     current_user = users.get_current_user()
 
-    # We need to first get a unique token for the user to
-    # promote.
-
-    # We provide the callback URL. This is where we want the
-    # user to be sent after they have granted us
-    # access. Sometimes, developers generate different URLs
-    # based on the environment. You want to set this value to
-    # "http://localhost:8080/verify" if you are running the
-    # development server locally.
-
-    # We also provide the data scope(s). In general, we want
-    # to limit the scope as much as possible. For this
-    # example, we just ask for access to all feeds.
+    # First determine if we have been granted access for the user
     access_token_key = 'access_token_%s' % current_user.user_id()
     request_token = gdata.gauth.ae_load(access_token_key)
-    if request_token is None:
+    granted = (request_token is not None)    
+    template_vals = {'granted': granted}
+    if not granted:
       request_token_key = 'request_token_%s' % current_user.user_id()
       scopes = ['https://www.google.com/calendar/feeds/']
       oauth_callback = 'http://%s/verify' % self.request.host
       consumer_key = CONSUMER_KEY
       consumer_secret = CONSUMER_SECRET
-      request_token = gcal.get_oauth_token(scopes, oauth_callback,
+      request_token = GCAL.get_oauth_token(scopes, oauth_callback,
                                            consumer_key, consumer_secret)
 
       # Persist this token in the datastore.
       gdata.gauth.ae_save(request_token, request_token_key)
 
       # Generate the authorization URL.
-      approval_page_url = request_token.generate_authorization_url()
+      template_vals['link'] = request_token.generate_authorization_url()
 
-      message = '<a href="%s">Request token for the Google Calendar Scope</a>'
-      self.response.out.write(message % approval_page_url)
-    else:
-      message = '<a href="%s">You have already granted access</a>'
-      self.response.out.write(message % '/started')
+    path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
+    self.response.out.write(template.render(path, template_vals))
+
+  @login_required
+  def post(self):
+    link = self.request.get('calendar-link')
+
+    # gauranteed to be a user since login_required
+    current_user = users.get_current_user()
+    user_cal = UserCal(owner=current_user, calendars=[link])
+    user_cal.put()
+
+    link = 'http:%s ' % urlparse.urlparse(link).path  # Bad assumption, TODO
+    feed = urlopen(link)
+    ical = Calendar.from_string(feed.read())
+    feed.close()
+
+    for component in ical.walk():
+      if component.name == "VEVENT":
+        uid, event_data = parse_event(component)
+        event_match = Event.get_by_key_name(uid)
+        # SELECT * FROM Token WHERE __key__ = Key('Token', key)
+        if event_match.count() == 0:
+          # Make sure we are in correct calendar
+          auth_token_key = 'auth_token_%s' % current_user.user_id()
+          GCAL.auth_token = gdata.gauth.ae_load(auth_token_key)  # TODO, this will break
+          
+          # Create event in users calendar
+          event = gdata.calendar.data.CalendarEventEntry()
+          event.title = atom.data.Title(text=event_data['summary'])
+          event.content = atom.data.Content(text=event_data['description'])
+          event.where.append(gdata.calendar.data.CalendarWhere(
+              value=event_data['location']))
+          # strftime('%Y-%m-%dT%H:%M:%S.000Z')
+          # works with both date and datetime
+          start_time = event_data['when:from']. \
+                       strftime('%Y-%m-%dT%H:%M:%S.000Z')
+          end_time = event_data['when:to']. \
+                     strftime('%Y-%m-%dT%H:%M:%S.000Z')
+          event.when.append(gdata.calendar.data.When(start=start_time,
+                                                     end=end_time))
+          new_event = GCAL.InsertEvent(event)
+
+          # Add event to datastore for tracking
+          event_instance = Event(key_name=uid,
+                                 owners=[current_user.user_id()],
+                                 event_data=db.Text(pickle.dumps(event_data)),
+                                 event_gcal_id=new_event.id.text)
+          event_instance.put()
+        elif event_match.count() == 1:
+          event_match = event_match.get()
+
+    self.redirect('/')
 
 
 class RequestTokenCallback(webapp.RequestHandler):
@@ -157,9 +148,9 @@ class RequestTokenCallback(webapp.RequestHandler):
       gdata.gauth.ae_save(request_token, auth_token_key)
 
       # We can now upgrade our authorized token to a long-lived
-      # access token by associating it with gcal client, and
+      # access token by associating it with the GCAL client, and
       # calling the get_access_token method.
-      gcal.auth_token = gcal.get_access_token(request_token)
+      GCAL.auth_token = GCAL.get_access_token(request_token)
 
       # Note that we want to keep the access token around, as it
       # will be valid for all API calls in the future until a user
@@ -173,105 +164,21 @@ class RequestTokenCallback(webapp.RequestHandler):
     self.response.out.write(message % '/started')
 
 
-class StartedHandler(webapp.RequestHandler):
-
-  @login_required
+class VerifyHandler(webapp.RequestHandler):
+  """Handles / as well as redirects for login required"""
   def get(self):
-    """Beep."""
-    current_user = users.get_current_user()
-
-    # Finally fetch the document list and print document title in
-    # the response
-    access_token_key = 'access_token_%s' % current_user.user_id()
-    request_token = gdata.gauth.ae_load(access_token_key)
-    gcal.auth_token = request_token
-
-    feed = gcal.GetAllCalendarsFeed()
-    calendars = []
-    for i, a_calendar in enumerate(feed.entry):
-      calendars.append((i, a_calendar.title.text))
-
-    path = os.path.join(os.path.dirname(__file__), 'templates', 'select.html')
-    self.response.out.write(template.render(path, {'calendars': calendars}))
+    path = os.path.join(os.path.dirname(__file__),
+                        'googlef7560eebc24762bb.html')
+    self.response.out.write(template.render(path, {}))
 
 
-class CalendarHandler(webapp.RequestHandler):
-
-  @login_required
+class Throw404(webapp.RequestHandler):
+  """Catches all non-specified (404) requests"""
   def get(self):
-    """Beep."""
-    current_user = users.get_current_user()
+    self.error(404)
+    path = os.path.join(os.path.dirname(__file__), 'templates', '404.html')
+    self.response.out.write(template.render(path, {}))
 
-    # Finally fetch the document list and print document title in
-    # the response
-    chosen = self.request.get('cal', None)
-    if chosen is not None:
-      try:
-        chosen = int(chosen)
-      except (TypeError, ValueError):
-        path = os.path.join(os.path.dirname(__file__),
-                            'templates',
-                            'index.html')
-        self.response.out.write(template.render(path, {}))
-        return
-
-      link = ('webcal://www.tripit.com/feed/ical/private/'
-              '3F43994D-4591D1AA4C63B1472D8D5D0E9568E5A8/tripit.ics')
-      link = 'http:%s ' % urlparse.urlparse(link).path
-
-      feed = urlopen(link)
-      cal_feed = feed.read()
-      feed.close()
-
-      ical = Calendar.from_string(cal_feed)
-      name = unicode(ical.get('X-WR-CALNAME'))
-      pickled_vals = [pickle_event(component)
-                      for component in ical.walk()
-                      if component.name == "VEVENT"]
-      uid_endings = ['====================\n%s' % x[0] for x in pickled_vals]
-      times = sorted([pickle.loads(x[1])['when:from'] for x in pickled_vals],
-                     cmp=date_datetime_compare)
-      start_date = '%s-%02d-%02d' % (times[0].year,
-                                     times[0].month,
-                                     times[0].day)
-      end_date = '%s-%02d-%02d' % (times[-1].year,
-                                   times[-1].month,
-                                   times[-1].day)
-  
-      uri = gcal.GetAllCalendarsFeed().entry[chosen].find_alternate_link()
-      query = gdata.calendar.client.CalendarEventQuery()
-      query.max_results = 50
-      query.start_min = start_date
-      query.start_max = end_date
-      feed = gcal.GetCalendarEventFeed(uri=uri, q=query)
-      # if len(feed.entry) == 50:
-      # use feed.GetNextLink().href
-      calendar = []
-      for i, an_event in enumerate(feed.entry):
-        calendar.append((i, str(val)))
-#         description = an_event.content.text
-#         if description is None:
-#           continue
-
-#         for ending in uid_endings:
-#           if description.endswith(ending):
-#             val = {'when:from': an_event.when[0].start
-#                        if an_event.when else None,
-#                    'when:to': an_event.when[0].end
-#                        if an_event.when else None,
-#                    'summary': an_event.title.text,
-#                    'location': an_event.where[0].value
-#                        if an_event.where else None,
-#                    'description': description}
-#             calendar.append((i, str(val)))
-
-      path = os.path.join(os.path.dirname(__file__),
-                          'templates',
-                          'calendar.html')
-      self.response.out.write(template.render(path, {'calendar': calendar}))
-    else:
-      path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
-      self.response.out.write(template.render(path, {}))
 
 # event = gdata.calendar.data.CalendarEventEntry()
 # event.title = atom.data.Title(text=title)
@@ -290,14 +197,11 @@ application = webapp.WSGIApplication([
   ###############
   ### EXAMPLE ###
   ###############
-  ('/step1', Fetcher),
+  ('/', MainHandler),
   ('/verify', RequestTokenCallback),
-  ('/started', StartedHandler),
-  ('/calendar', CalendarHandler),
   ###############
   ###############
   ('/googlef7560eebc24762bb.html', VerifyHandler),
-  ('/', MainHandler),
   ('/.*', Throw404),
   ], debug=True)
 

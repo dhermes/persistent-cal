@@ -74,12 +74,42 @@ consumer_key = CONSUMER_KEY
 consumer_secret = CONSUMER_SECRET
 request_token = gcal.get_oauth_token(scopes, oauth_callback,
                                      consumer_key, consumer_secret)
-# go to https://www.google.com/accounts/b/0/OAuthAuthorizeToken?
-#           hd=default&oauth_token=<request_token.token>
-# then authorize then click accept and copy over the query_params
-q_params = '?oauth_verifier=YOPXUEaGgfaWPDbw6cMYhgko&oauth_token=4%2F90TvjZW4WaTxNWGcnCu3ombri-an'
-gdata.gauth.authorize_request_token(request_token, '%s%s' % (oauth_callback, q_params))
-gcal.auth_token = gcal.get_access_token(request_token)
+token_data = {'auth_state': 3,
+              'next': None,
+              'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
+              'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
+              'verifier': None}
+for key, value in token_data.items():
+  setattr(request_token, key, value)
+gcal.auth_token = request_token
+
+# # # BEEP # # #
+# event = gdata.calendar.data.CalendarEventEntry()
+# import atom
+# event.title = atom.data.Title(text='Test')
+# event.content = atom.data.Content(text='Test content')
+# where='On the courts'
+# event.where.append(gdata.calendar.data.CalendarWhere(value=where))
+# start_time = '2011-08-01T22:00:00.000Z'
+# end_time = '2011-08-01T23:00:00.000Z'
+# # %Y-%m-%dT%H:%M:%S.000Z
+# # start_time = time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+# # .... returns '2011-07-31T23:44:54.000Z' (in UTC)
+# # whereas my things have format
+# # 2011-08-01T08:00:00.000-07:00
+# event.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+# new_event = gcal.InsertEvent(event)
+# print new_event.id.text
+# # # BEEP # # #
+
+# # === OLD WAY ===
+# # go to https://www.google.com/accounts/b/0/OAuthAuthorizeToken?
+# #           hd=default&oauth_token=<request_token.token>
+# # then authorize then click accept and copy over the query_params
+# q_params = '?oauth_verifier=YOPXUEaGgfaWPDbw6cMYhgko&oauth_token=4%2F90TvjZW4WaTxNWGcnCu3ombri-an'
+# gdata.gauth.authorize_request_token(request_token, '%s%s' % (oauth_callback, q_params))
+# gcal.auth_token = gcal.get_access_token(request_token)
+# # === OLD WAY ===
 
 a = gcal.GetAllCalendarsFeed()
 # let users choose index from [xx.title.text for xx in a.entry]
