@@ -41,6 +41,15 @@ def FormatTime(time_value):
     time_parse += 'T%H:%M:%S.000Z'
   return time_value.strftime(time_parse)
 
+
+def ProcessEventID(event_id, current_user):
+  # currently, only supporting TripIt
+  if not event_id.startswith('item-'):
+    return '%s;user:%s' % (event_id, current_user.user_id())
+  else:
+    return event_id
+
+
 def ParseEvent(event):
   # Assumes event is type icalendar.cal.Event
   
@@ -54,8 +63,22 @@ def ParseEvent(event):
                 'description': unicode(event.get('description'))}
   return uid, event_data
 
-# # WITNESS:
 
+def ConvertToInterval(timestamp):
+  # Monday 0, sunday 6
+  # 8 intervals in a day, round up hours
+  interval = 8*timestamp.weekday() + timestamp.hour/3 + 1
+
+  # If we are exactly on an hour that is a multiple of three
+  # we do not wish to round up since floor(x) == ceil(x), contrary
+  # to all other cases where ceil(x) == floor(x) + 1
+  if (timestamp.hour % 3 == 0 and timestamp.minute == 0 and
+      timestamp.second == 0 and timestamp.microsecond == 0):
+    interval -= 1
+
+  return interval % 56
+
+# # WITNESS:
 # # DAN
 # (u'4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com',
 #  {'description': u'Daniel Hermes is in San Diego, CA from Sep 1 to Sep 6, 2011\nView and/or edit details in TripIt : http://www.tripit.com/trip/show/id/18643091\nTripIt - organize your travel at http://www.tripit.com\n',
@@ -115,7 +138,7 @@ def UpdateSubcription(link, calendar_client, current_user):
     # TODO(dhermes) add calendar name to event data
     if component.name == "VEVENT":
       uid, event_data = ParseEvent(component)
-      # CHANGE HERE NOW ON BUS
+      uid = ProcessEventID(uid, current_user)
       event = Event.get_by_key_name(uid)
       if event is None:
         # Create new event in user's calendar
@@ -190,6 +213,15 @@ class MainHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, template_vals))
 
   def post(self):
+    frequency = self.request.get('frequency', None)
+    if frequency in ['three-hrs', 'six-hrs', 'half-day',
+                     'day', 'two-day', 'week']:
+      # split week in 56 3 hour windows, and assign the entire
+      # list based on these windows
+      now = datetime.utcnow()
+      
+      a = 1
+
     # TODO(dhermes): Add whitelist on adding for accepted providers
     # TODO(dhermes): Improve to take account for scheme (webcal not real scheme)
     link = self.request.get('calendar-link')

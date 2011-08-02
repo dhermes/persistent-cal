@@ -10,6 +10,14 @@
     <form action="/" method="post">
       <input type="text" name="calendar-link" />
       <input type="submit" value="Submit" />
+      <select name="frequency">
+        <option value="three-hrs">3 hours</option>
+        <option value="six-hrs">6 hours</option>
+        <option value="half-day">12 hours</option>
+        <option value="day" selected="selected">24 hours</option>
+        <option value="two-day">2 days</option>
+        <option value="week">1 week</option>
+      </select>
     </form>
     {% else %}
     Please <a href="{{ link }}">grant access</a>
