@@ -54,6 +54,23 @@ def ParseEvent(event):
                 'description': unicode(event.get('description'))}
   return uid, event_data
 
+# # WITNESS:
+
+# # DAN
+# (u'4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com',
+#  {'description': u'Daniel Hermes is in San Diego, CA from Sep 1 to Sep 6, 2011\nView and/or edit details in TripIt : http://www.tripit.com/trip/show/id/18643091\nTripIt - organize your travel at http://www.tripit.com\n',
+#   'location': u'San Diego, CA',
+#   'summary': u'Car/Hotel Reservation',
+#   'when:from': datetime.date(2011, 9, 1),
+#   'when:to': datetime.date(2011, 9, 7)})
+
+# # SHARONA
+# (u'4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com',
+#  {'description': u'Sharona Franko is in San Diego, CA from Sep 1 to Sep 6, 2011\nView and/or edit details in TripIt : http://www.tripit.com/trip/show/id/18643091\nTripIt - organize your travel at http://www.tripit.com\n',
+#   'location': u'San Diego, CA',
+#   'summary': u'Car/Hotel Reservation',
+#   'when:from': datetime.date(2011, 9, 1),
+#   'when:to': datetime.date(2011, 9, 7)})
 
 def AddOrUpdateEvent(event_data, calendar_client, event=None, push_update=True):
   # Create event in user's calendar
@@ -98,6 +115,7 @@ def UpdateSubcription(link, calendar_client, current_user):
     # TODO(dhermes) add calendar name to event data
     if component.name == "VEVENT":
       uid, event_data = ParseEvent(component)
+      # CHANGE HERE NOW ON BUS
       event = Event.get_by_key_name(uid)
       if event is None:
         # Create new event in user's calendar
