@@ -4,7 +4,7 @@ class Event(db.Model):
   """Holds data for a calendar event (including shared owners)"""
   owners = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # will be python dict in pickle
-  event_gcal_id = db.StringProperty(required=True)
+  gcal_edit = db.StringProperty(required=True)
 
 
 class UserCal(db.Model):

@@ -74,11 +74,16 @@ consumer_key = CONSUMER_KEY
 consumer_secret = CONSUMER_SECRET
 request_token = gcal.get_oauth_token(scopes, oauth_callback,
                                      consumer_key, consumer_secret)
-token_data = {'auth_state': 3,
+token_data = {'verifier': None,
               'next': None,
-              'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
-              'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
-              'verifier': None}
+              'token': '1/9ZlF79w9rMfJ6UqkL22OBWJ9XLFJrdNNPhzQDCcWiBw',
+              'auth_state': 3,
+              'token_secret': 'ohwUXaeGyOF4pNvE6dhMcCdf'}
+# token_data = {'auth_state': 3,
+#               'next': None,
+#               'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
+#               'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
+#               'verifier': None}
 for key, value in token_data.items():
   setattr(request_token, key, value)
 gcal.auth_token = request_token
@@ -165,26 +170,20 @@ for i, an_event in enumerate(feed.entry):
 ############################
 # dhermes@bossylobster.com #
 ############################
-# {'auth_state': 1,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+# {'verifier': None,
 #  'next': None,
-#  'token': '4/90TvjZW4WaTxNWGcnCu3ombri-an',
-#  'token_secret': 'ZyedHs0am9Z8MqrsCbZN678d',
-#  'verifier': None}
+#  'token': '4/ZWGqqKl2k2lnwTaok8r633KLVbgO',
+#  'auth_state': 1,
+#  'token_secret': 'x9ZXrH6qjOFlv-sw-Pq0Flo6'}
 
-# {'auth_state': 2,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+# {'verifier': 'HryWVumWGNU3haI-ohMbzwUx',
 #  'next': None,
-#  'token': '4/90TvjZW4WaTxNWGcnCu3ombri-an',
-#  'token_secret': 'ZyedHs0am9Z8MqrsCbZN678d',
-#  'verifier': 'YOPXUEaGgfaWPDbw6cMYhgko'}
+#  'token': '4/ZWGqqKl2k2lnwTaok8r633KLVbgO',
+#  'auth_state': 2,
+#  'token_secret': 'x9ZXrH6qjOFlv-sw-Pq0Flo6'}
 
-# {'auth_state': 3,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
+# {'verifier': None,
 #  'next': None,
-#  'token': '1/iLuG70qpK2UZu0Ct9hQrGeV_L-OMEXbUZs5tIo5wWjs',
-#  'token_secret': 'TIHutZun2wQiJiG7DnrU0KdH',
-#  'verifier': None}
+#  'token': '1/9ZlF79w9rMfJ6UqkL22OBWJ9XLFJrdNNPhzQDCcWiBw',
+#  'auth_state': 3,
+#  'token_secret': 'ohwUXaeGyOF4pNvE6dhMcCdf'}
