@@ -75,8 +75,8 @@ consumer_secret = CONSUMER_SECRET
 request_token = gcal.get_oauth_token(scopes, oauth_callback,
                                      consumer_key, consumer_secret)
 # from guarded_tokens import GMAIL as TOKEN
-# from guarded_tokens import GOOGLE as TOKEN
-from guarded_tokens import BOSSYLOBSTER as TOKEN
+from guarded_tokens import GOOGLE as TOKEN
+# from guarded_tokens import BOSSYLOBSTER as TOKEN
 token_data = TOKEN['3']
 for key, value in token_data.items():
   setattr(request_token, key, value)
@@ -150,6 +150,6 @@ for i, an_event in enumerate(feed.entry):
 
 # When viewing as the author, who only has 1 value
 
-for xx in dir(gcal):
+for xx in dir(feed):
   if not xx.startswith('_'):
-    print xx, ':', getattr(gcal, xx)
+    print xx, ':', getattr(feed, xx)

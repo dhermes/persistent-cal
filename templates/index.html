@@ -5,7 +5,6 @@
   </head>
   <body>
     Hello {{ id }}.
-    {% if granted %}
     Thanks for signing up, please provide the link for the calendar you wish to update with
     <form action="/" method="post">
       <input type="text" name="calendar-link" />
@@ -19,8 +18,5 @@
         <option value="week">1 week</option>
       </select>
     </form>
-    {% else %}
-    Please <a href="{{ link }}">grant access</a>
-    {% endif %}
   </body>
 </html>

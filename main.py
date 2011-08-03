@@ -25,10 +25,22 @@ from models import Event
 from models import UserCal
 from secret_key import CONSUMER_KEY
 from secret_key import CONSUMER_SECRET
+from secret_key import TOKEN
+from secret_key import TOKEN_SECRET
+
 
 # Create an instance of the DocsService to make API calls
+AUTH_TOKEN = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
+                                        consumer_secret=CONSUMER_SECRET,
+                                        token=TOKEN,
+                                        token_secret=TOKEN_SECRET,
+                                        auth_state=3)
 GCAL = gdata.calendar.client.CalendarClient(source='persistent-cal')
+GCAL.auth_token = AUTH_TOKEN
 
+URI = ('https://www.google.com/calendar/feeds/'
+       'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
+# FEED = GCAL.GetCalendarEventFeed(uri=URI)
 
 def FormatTime(time_value):
   # Currently only expecting datetime.datetime or datetime.date
@@ -42,41 +54,34 @@ def FormatTime(time_value):
   return time_value.strftime(time_parse)
 
 
-def ProcessEventID(event_id, current_user):
-  # currently, only supporting TripIt
-  if not event_id.startswith('item-'):
-    return '%s;user:%s' % (event_id, current_user.user_id())
-  else:
-    return event_id
-
-
 def ParseEvent(event):
   # Assumes event is type icalendar.cal.Event
   
   # all events have a UID, and almost all begin with 'item-';
   # those that don't are an away event for the entire trip
   uid = unicode(event.get('uid'))
+  description = unicode(event.get('description'))
+  location = unicode(event.get('location'))
+  # # WITNESS:
+  # 4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com
+  # via 3F43994D-4591D1AA4C63B1472D8D5D0E9568E5A8/tripit.ics
+  # description: Daniel Hermes is in San Diego, CA from Sep 1...
+  # and via 4A025929-DCB74CB87F330487615696811896215A/tripit.ics
+  # description: Sharona Franko is in San Diego, CA from Sep 1...
+  if not uid.startswith('item-'):
+    target = ' is in %s ' % location
+    if description.count(target) != 1:
+      # TODO(dhermes) log and fail silently
+      raise Exception('Unrecognized event format')
+
+    description = 'In %s %s' % (location, description.split(target)[1])
+
   event_data = {'when:from': event.get('dtstart').dt,
                 'when:to': event.get('dtend').dt,
                 'summary': unicode(event.get('summary')),
-                'location': unicode(event.get('location')),
-                'description': unicode(event.get('description'))}
+                'location': location,
+                'description': description}
   return uid, event_data
-
-
-def ParseEditLink(link, current_user):
-  # Reference:
-  # http://code.google.com/apis/calendar/data/2.0/reference.html#Event_feeds
-  link_params = urlparse.urlparse(link).path.split('/')
-  if not link.startswith('https://www.google.com/calendar/feeds/') or len(link_params) != 7:
-    raise Exception('Bad edit link %s' % link)
-
-  # Due to first half of the boolean expr. we know link_params starts with
-  # ['', 'calendar', 'feeds', ...
-  if link_params[3] == 'default':
-    link_params[3] = current_user.email()
-
-  return 'https://www.google.com' + '/'.join(link_params)
 
 
 def ConvertToInterval(timestamp):
@@ -93,24 +98,8 @@ def ConvertToInterval(timestamp):
 
   return interval % 56
 
-# # WITNESS:
-# # DAN
-# (u'4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com',
-#  {'description': u'Daniel Hermes is in San Diego, CA from Sep 1 to Sep 6, 2011\nView and/or edit details in TripIt : http://www.tripit.com/trip/show/id/18643091\nTripIt - organize your travel at http://www.tripit.com\n',
-#   'location': u'San Diego, CA',
-#   'summary': u'Car/Hotel Reservation',
-#   'when:from': datetime.date(2011, 9, 1),
-#   'when:to': datetime.date(2011, 9, 7)})
 
-# # SHARONA
-# (u'4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com',
-#  {'description': u'Sharona Franko is in San Diego, CA from Sep 1 to Sep 6, 2011\nView and/or edit details in TripIt : http://www.tripit.com/trip/show/id/18643091\nTripIt - organize your travel at http://www.tripit.com\n',
-#   'location': u'San Diego, CA',
-#   'summary': u'Car/Hotel Reservation',
-#   'when:from': datetime.date(2011, 9, 1),
-#   'when:to': datetime.date(2011, 9, 7)})
-
-def AddOrUpdateEvent(event_data, calendar_client, event=None, push_update=True):
+def AddOrUpdateEvent(event_data, event=None, push_update=True):
   # Create event in user's calendar
   update = (event is not None)
   if not update:
@@ -130,65 +119,54 @@ def AddOrUpdateEvent(event_data, calendar_client, event=None, push_update=True):
 
   if update:
     if push_update:
-      calendar_client.Update(event)
+      # TODO(dhermes) see if possible to manage this from feed
+      GCAL.Update(event)
     return event
   else: 
     # Who
     who_add = gdata.calendar.data.EventWho(email=event_data['email'])
     event.who.append(who_add)
 
-    # TODO(dhermes): reconsider ownership (follows the below)
-    # Insert to calendar, thus making the owner of the client
-    # the owner/author of the event. All subsequent people to add
-    # said event will not be able to edit the event for everyone
-    # else but the author will be
-    new_event = calendar_client.InsertEvent(event)
+    # TODO(dhermes) see if possible to manage this from feed
+    new_event = GCAL.InsertEvent(event, insert_uri=URI)
     return new_event
 
 
-def UpdateSubcription(link, calendar_client, current_user):
+def UpdateSubcription(link, current_user):
   current_user_id = current_user.user_id()
 
-  # Make sure we are in correct calendar
-  access_token_key = 'access_token_%s' % current_user_id
-  # TODO(dhermes): this might not load/exist
-  calendar_client.auth_token = gdata.gauth.ae_load(access_token_key)
-
-  feed = urlopen(link)
-  ical = Calendar.from_string(feed.read())
-  feed.close()
+  import_feed = urlopen(link)
+  ical = Calendar.from_string(import_feed.read())
+  import_feed.close()
 
   for component in ical.walk():
     # TODO(dhermes) add calendar name to event data
     if component.name == "VEVENT":
       uid, event_data = ParseEvent(component)
-      uid = ProcessEventID(uid, current_user)
       event = Event.get_by_key_name(uid)
       if event is None:
-        # Create new event in user's calendar
-        # (leaving the uri argument creates new)
+        # Create new event
+        # (leaving out the event argument creates a new event)
         event_data['email'] = current_user.email()
-        cal_event = AddOrUpdateEvent(event_data, calendar_client)
+        cal_event = AddOrUpdateEvent(event_data)
 
-        # Add event to datastore for tracking
-        # TODO(dhermes): consider adding a universal private calendar for all
-        #                events and granting a new user access upon signup
-        gcal_edit = ParseEditLink(cal_event.get_edit_link().href, current_user)
+        gcal_edit = cal_event.get_edit_link().href
         event = Event(key_name=uid,
-                      owners=[current_user_id],  # id is string
+                      who=[current_user_id],  # id is string
                       event_data=db.Text(pickle.dumps(event_data)),
                       gcal_edit=gcal_edit)
         event.put()
       else:
         # We need to make changes for new event data or a new owner
-        if (current_user_id not in event.owners or
+        if (current_user_id not in event.who or
             db.Text(pickle.dumps(event_data)) != event.event_data):
           # Grab GCal event to edit
-          cal_event = calendar_client.GetEventEntry(uri=event.gcal_edit)
+          # TODO(dhermes) see if possible to manage this from feed
+          cal_event = GCAL.GetEventEntry(uri=event.gcal_edit)
 
-          # Update owners
-          if current_user_id not in event.owners:
-            event.owners.append(current_user_id)  # id is string
+          # Update who
+          if current_user_id not in event.who:
+            event.who.append(current_user_id)  # id is string
 
             # add existing event to current_user's calendar
             who_add = gdata.calendar.data.EventWho(email=current_user.email())
@@ -199,11 +177,13 @@ def UpdateSubcription(link, calendar_client, current_user):
             event.event_data = db.Text(pickle.dumps(event_data))
 
             # Don't push update to avoid pushing twice (if both changed)
-            AddOrUpdateEvent(event_data, calendar_client,
-                             event=cal_event, push_update=False)
+            AddOrUpdateEvent(event_data,
+                             event=cal_event,
+                             push_update=False)
 
           # Push all updates to calendar event
-          calendar_client.Update(cal_event)
+          # TODO(dhermes) see if possible to manage this from feed
+          GCAL.Update(cal_event)
 
           # After all possible changes to the Event instance have occurred
           event.put()
@@ -218,25 +198,9 @@ class MainHandler(webapp.RequestHandler):
 
     # gauranteed to be a user since login_required
     current_user = users.get_current_user()
+    template_vals = {'id': current_user.email()}
 
-    # First determine if we have been granted access for the user
-    access_token_key = 'access_token_%s' % current_user.user_id()
-    access_token = gdata.gauth.ae_load(access_token_key)
-    granted = (access_token is not None)
-    template_vals = {'id': current_user.email(), 'granted': granted}
-    if not granted:
-      request_token_key = 'request_token_%s' % current_user.user_id()
-      scopes = ['https://www.google.com/calendar/feeds/']
-      oauth_callback = 'http://%s/verify' % self.request.host
-      request_token = GCAL.get_oauth_token(scopes, oauth_callback,
-                                           CONSUMER_KEY, CONSUMER_SECRET)
-
-      # Persist this token in the datastore.
-      gdata.gauth.ae_save(request_token, request_token_key)
-
-      # Generate the authorization URL.
-      template_vals['link'] = request_token.generate_authorization_url()
-
+    # TODO(dhermes) look up UserCal and populate subscriptions/frequency
     path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
     self.response.out.write(template.render(path, template_vals))
 
@@ -267,39 +231,9 @@ class MainHandler(webapp.RequestHandler):
       user_cal.calendars.append(link)
       user_cal.put()
 
-    UpdateSubcription(link, GCAL, current_user)
+    UpdateSubcription(link, current_user)
 
     self.redirect('/')
-
-
-class RequestTokenCallback(webapp.RequestHandler):
-
-  @login_required
-  def get(self):
-    """When the user grants access, they are redirected back to this
-    handler where their authorized request token is exchanged for a
-    long-lived access token."""
-
-    current_user = users.get_current_user()
-
-    # Check if access_token exists
-    access_token_key = 'access_token_%s' % current_user.user_id()
-    access_token = gdata.gauth.ae_load(access_token_key)
-    # If not, upgrade the request_token to an access_token
-    if access_token is None:
-      request_token_key = 'request_token_%s' % current_user.user_id()
-      # TODO(dhermes): might not exist
-      request_token = gdata.gauth.ae_load(request_token_key)
-      gdata.gauth.authorize_request_token(request_token, self.request.uri)
-      auth_token_key = 'auth_token_%s' % current_user.user_id()
-      gdata.gauth.ae_save(request_token, auth_token_key)
-
-      # We can now upgrade our authorized token to a long-lived access token
-      GCAL.auth_token = GCAL.get_access_token(request_token)
-      gdata.gauth.ae_save(request_token, access_token_key)
-
-    path = os.path.join(os.path.dirname(__file__), 'templates', 'verify.html')
-    self.response.out.write(template.render(path, {}))
 
 
 class OwnershipVerifyHandler(webapp.RequestHandler):
@@ -322,7 +256,6 @@ class Throw404(webapp.RequestHandler):
 
 application = webapp.WSGIApplication([
   ('/', MainHandler),
-  ('/verify', RequestTokenCallback),
   ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
   ('/.*', Throw404),
   ], debug=True)
