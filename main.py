@@ -64,6 +64,21 @@ def ParseEvent(event):
   return uid, event_data
 
 
+def ParseEditLink(link, current_user):
+  # Reference:
+  # http://code.google.com/apis/calendar/data/2.0/reference.html#Event_feeds
+  link_params = urlparse.urlparse(link).path.split('/')
+  if not link.startswith('https://www.google.com/calendar/feeds/') or len(link_params) != 7:
+    raise Exception('Bad edit link %s' % link)
+
+  # Due to first half of the boolean expr. we know link_params starts with
+  # ['', 'calendar', 'feeds', ...
+  if link_params[3] == 'default':
+    link_params[3] = current_user.email()
+
+  return 'https://www.google.com' + '/'.join(link_params)
+
+
 def ConvertToInterval(timestamp):
   # Monday 0, sunday 6
   # 8 intervals in a day, round up hours
@@ -118,6 +133,15 @@ def AddOrUpdateEvent(event_data, calendar_client, event=None, push_update=True):
       calendar_client.Update(event)
     return event
   else: 
+    # Who
+    who_add = gdata.calendar.data.EventWho(email=event_data['email'])
+    event.who.append(who_add)
+
+    # TODO(dhermes): reconsider ownership (follows the below)
+    # Insert to calendar, thus making the owner of the client
+    # the owner/author of the event. All subsequent people to add
+    # said event will not be able to edit the event for everyone
+    # else but the author will be
     new_event = calendar_client.InsertEvent(event)
     return new_event
 
@@ -143,13 +167,17 @@ def UpdateSubcription(link, calendar_client, current_user):
       if event is None:
         # Create new event in user's calendar
         # (leaving the uri argument creates new)
+        event_data['email'] = current_user.email()
         cal_event = AddOrUpdateEvent(event_data, calendar_client)
 
         # Add event to datastore for tracking
+        # TODO(dhermes): consider adding a universal private calendar for all
+        #                events and granting a new user access upon signup
+        gcal_edit = ParseEditLink(cal_event.get_edit_link().href, current_user)
         event = Event(key_name=uid,
                       owners=[current_user_id],  # id is string
                       event_data=db.Text(pickle.dumps(event_data)),
-                      gcal_edit=cal_event.get_edit_link().href)
+                      gcal_edit=gcal_edit)
         event.put()
       else:
         # We need to make changes for new event data or a new owner
@@ -213,19 +241,19 @@ class MainHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, template_vals))
 
   def post(self):
-    frequency = self.request.get('frequency', None)
-    if frequency in ['three-hrs', 'six-hrs', 'half-day',
-                     'day', 'two-day', 'week']:
-      # split week in 56 3 hour windows, and assign the entire
-      # list based on these windows
-      now = datetime.utcnow()
+#     frequency = self.request.get('frequency', None)
+#     if frequency in ['three-hrs', 'six-hrs', 'half-day',
+#                      'day', 'two-day', 'week']:
+#       # split week in 56 3 hour windows, and assign the entire
+#       # list based on these windows
+#       now = datetime.utcnow()
       
-      a = 1
+#       a = 1
 
     # TODO(dhermes): Add whitelist on adding for accepted providers
     # TODO(dhermes): Improve to take account for scheme (webcal not real scheme)
-    link = self.request.get('calendar-link')
-    link = 'http:%s ' % urlparse.urlparse(link).path
+    link = self.request.get('calendar-link', '').strip()
+    link = 'http:%s' % urlparse.urlparse(link).path
 
     # TODO(dhermes): make sure user is logged in
     current_user = users.get_current_user()

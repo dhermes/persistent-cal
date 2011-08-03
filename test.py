@@ -74,16 +74,10 @@ consumer_key = CONSUMER_KEY
 consumer_secret = CONSUMER_SECRET
 request_token = gcal.get_oauth_token(scopes, oauth_callback,
                                      consumer_key, consumer_secret)
-token_data = {'verifier': None,
-              'next': None,
-              'token': '1/9ZlF79w9rMfJ6UqkL22OBWJ9XLFJrdNNPhzQDCcWiBw',
-              'auth_state': 3,
-              'token_secret': 'ohwUXaeGyOF4pNvE6dhMcCdf'}
-# token_data = {'auth_state': 3,
-#               'next': None,
-#               'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
-#               'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
-#               'verifier': None}
+# from guarded_tokens import GMAIL as TOKEN
+# from guarded_tokens import GOOGLE as TOKEN
+from guarded_tokens import BOSSYLOBSTER as TOKEN
+token_data = TOKEN['3']
 for key, value in token_data.items():
   setattr(request_token, key, value)
 gcal.auth_token = request_token
@@ -111,8 +105,9 @@ gcal.auth_token = request_token
 # # go to https://www.google.com/accounts/b/0/OAuthAuthorizeToken?
 # #           hd=default&oauth_token=<request_token.token>
 # # then authorize then click accept and copy over the query_params
-# q_params = '?oauth_verifier=YOPXUEaGgfaWPDbw6cMYhgko&oauth_token=4%2F90TvjZW4WaTxNWGcnCu3ombri-an'
-# gdata.gauth.authorize_request_token(request_token, '%s%s' % (oauth_callback, q_params))
+# q_params = '?oauth_verifier=<OA_V>&oauth_token=<OA_T>'
+# gdata.gauth.authorize_request_token(request_token, '%s%s' % (
+#     oauth_callback, q_params))
 # gcal.auth_token = gcal.get_access_token(request_token)
 # # === OLD WAY ===
 
@@ -137,53 +132,24 @@ for i, an_event in enumerate(feed.entry):
     else:
       print '\t\t\t%s' % ('No status',)
 
+# RequestError: Server responded with: 403, Could not access calendar specified in entry id.
+# calendar = gdata.calendar.data.CalendarEntry()
+# calendar.id = atom.data.Id(text='dhermes@bossylobster.com')
+# returned_calendar = gcal.InsertCalendarSubscription(calendar)
 
-#############################
-# daniel.j.hermes@gmail.com #
-#############################
-# {'auth_state': 1,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
-#  'next': None,
-#  'token': '4/BSbwDH19fWTYuT0iRchcnut9EjHz',
-#  'token_secret': 'anWqxwuuhqazbbwpcX_1teT2',
-#  'verifier': None}
 
-# ?oauth_verifier=cs-aI1nEkhyqHjVg5InR1q1X&oauth_token=4%2FBSbwDH19fWTYuT0iRchcnut9EjHz
+# gdata/client.py
+# RedirectError: Too many redirects from server: 302 -- line 305 etc.
 
-# {'auth_state': 2,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
-#  'next': None,
-#  'token': '4/BSbwDH19fWTYuT0iRchcnut9EjHz',
-#  'token_secret': 'anWqxwuuhqazbbwpcX_1teT2',
-#  'verifier': 'cs-aI1nEkhyqHjVg5InR1q1X'}
 
-# {'auth_state': 3,
-#  'consumer_key': 'persistent-cal.appspot.com',
-#  'consumer_secret': 'SF7IeKf2olrEAYKzj6NSPR9U',
-#  'next': None,
-#  'token': '1/suaZl-xTHz5hykuUb6RAYEkN7YamCVv6hfsxJzKivSY',
-#  'token_secret': 'sLCasckqtSUmFv-KHPYb27zf',
-#  'verifier': None}
 
-############################
-# dhermes@bossylobster.com #
-############################
-# {'verifier': None,
-#  'next': None,
-#  'token': '4/ZWGqqKl2k2lnwTaok8r633KLVbgO',
-#  'auth_state': 1,
-#  'token_secret': 'x9ZXrH6qjOFlv-sw-Pq0Flo6'}
 
-# {'verifier': 'HryWVumWGNU3haI-ohMbzwUx',
-#  'next': None,
-#  'token': '4/ZWGqqKl2k2lnwTaok8r633KLVbgO',
-#  'auth_state': 2,
-#  'token_secret': 'x9ZXrH6qjOFlv-sw-Pq0Flo6'}
+# keep = 'https://www.google.com/calendar/feeds/dhermes%40bossylobster.com/private/full/5e6f1944ac3fs3dqro5fekn1mk'
+# cal_event = gcal.GetEventEntry(uri=keep)
+# RequestError: Server responded with: 403, daniel.j.hermes@gmail.com does not have read privileges on the calendar owned by dhermes@bossylobster.com.
 
-# {'verifier': None,
-#  'next': None,
-#  'token': '1/9ZlF79w9rMfJ6UqkL22OBWJ9XLFJrdNNPhzQDCcWiBw',
-#  'auth_state': 3,
-#  'token_secret': 'ohwUXaeGyOF4pNvE6dhMcCdf'}
+# When viewing as the author, who only has 1 value
+
+for xx in dir(gcal):
+  if not xx.startswith('_'):
+    print xx, ':', getattr(gcal, xx)
