@@ -62,6 +62,10 @@ def ParseEvent(event):
   uid = unicode(event.get('uid'))
   description = unicode(event.get('description'))
   location = unicode(event.get('location'))
+  # No destination specified does not match up
+  if location == 'No destination specified':
+    location = 'an unspecified location'
+
   # # WITNESS:
   # 4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com
   # via 3F43994D-4591D1AA4C63B1472D8D5D0E9568E5A8/tripit.ics
@@ -261,5 +265,7 @@ application = webapp.WSGIApplication([
   ], debug=True)
 
 
+# TODO(dhermes): read
+# http://code.google.com/appengine/docs/python/runtime.html#App_Caching
 if __name__ == '__main__':
   run_wsgi_app(application)
