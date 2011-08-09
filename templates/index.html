@@ -2,21 +2,152 @@
 <html>
   <head>
     <title>Persistent Calendar</title>
+<!--     <script language="javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js" type="text/javascript"></script>  -->
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+    <script language="javascript" src="/javascripts/jquery-1.6.2.min.js" type="text/javascript"></script> 
+    <script type="text/javascript">
+      // Thanks to petelepage http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/
+      function togglePanel(prefix) {
+        var elem = document.getElementById(prefix + "-panel");
+        if (elem.classList) {
+          elem.classList.toggle("show");
+        } else {
+          var classes = elem.className;
+          if (classes.indexOf("show") >= 0) {
+            elem.className = classes.replace("show", "");
+          } else {
+            elem.className = classes + " show";
+          }
+          console.log(elem.className);
+        }
+      }
+    </script>
+    <script language="javascript" type="text/javascript">
+    function draw_cal(data) {
+      var calendars = JSON.parse(data);
+
+      if (calendars.length) {
+        $('#subscriptions-row').show()
+      }
+
+      for (var i = 0; i < calendars.length; i++) {
+        $('#cal-' + i).html(calendars[i]);
+      }
+
+      if (calendars.length > 3) {
+        // $('#cal-button-row').remove()
+        $('#add-panel').remove()
+      } else {
+        $('#cal-button').show();
+      }
+    }
+
+    function reset(data) {
+      draw_cal(data);
+
+      $('#calendar-link').val('');
+      togglePanel('add');
+
+      return false;
+    }
+
+    function freq_set(data) {
+      var frequency = JSON.parse(data),
+          frequency_verbose = frequency[0],
+          frequency_val = frequency[1];
+
+      $('#freq-val').html(frequency_verbose);
+      $('#frequency').val(frequency_val);
+
+      return false;
+    }
+
+    function freq_reset(data) {
+      freq_set(data);
+      togglePanel('freq');
+
+      return false;
+    }
+
+    $(window).load(function () {
+      draw_cal('{{ calendars }}');
+      freq_set('{{ frequency }}');
+
+      $('#cal-button').click(function () {
+        $('#cal-data').show();
+        $(this).hide();
+      });
+
+      $('#add').submit(function () {
+        $.post('/add',
+               /* {'calendar-link': $('#calendar-link').val(),
+                   'frequency': $('#frequency').val()}, */
+               {'calendar-link': $('#calendar-link').val()},
+               reset);
+        return false;
+      });
+
+      $('#freq').submit(function () {
+        $.post('/freq',
+               {'frequency': $('#frequency').val()},
+               freq_reset);
+        return false;
+      });
+    });
+    </script>
   </head>
   <body>
-    Hello {{ id }}.
-    Thanks for signing up, please provide the link for the calendar you wish to update with
-    <form action="/" method="post">
-      <input type="text" name="calendar-link" />
-      <input type="submit" value="Submit" />
-      <select name="frequency">
-        <option value="three-hrs">3 hours</option>
-        <option value="six-hrs">6 hours</option>
-        <option value="half-day">12 hours</option>
-        <option value="day" selected="selected">24 hours</option>
-        <option value="two-day">2 days</option>
-        <option value="week">1 week</option>
-      </select>
-    </form>
+    <table>
+      <tr>
+        <td style="border-right-style:solid; border-right-width:1px;">
+          Hello {{ id }}. </br> Thanks for signing up.
+        </td>
+        <td>
+          <table id="subscriptions">
+            <tr id="subscriptions-row" style="display:none">
+              <td style="border-bottom-style:solid; border-bottom-width:1px;">Your subscriptions</td>
+            </tr>
+            <tr><td id="cal-0"></td></tr>
+            <tr><td id="cal-1"></td></tr>
+            <tr><td id="cal-2"></td></tr>
+            <tr><td id="cal-3"></td></tr>
+          {% if can_add %}
+          {% endif %}
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="border-top-style:solid; border-top-width:1px;" colspan="2">Your subscriptions will be updated <text id="freq-val"></text>.</td>
+      </tr>
+    </table>
+
+    <div id="add-panel" class="panel">
+<!--     Thanks to petelepage http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/ -->
+      <a href="#" onclick="togglePanel('add');" class="controller">&gt;</a>
+      <div class="controller">ADD</div>
+      <form id="add">
+        <div id="cal-data">
+          <input type="text" id="calendar-link" name="calendar-link" /><br/ >
+          <input type="submit" value="Submit" />
+        </div>
+      </form>
+    </div>
+    <div id="freq-panel" class="panel">
+      <a href="#" onclick="togglePanel('freq');" class="controller">&gt;</a>
+      <div class="controller">CHG</div>
+      <form id="freq">
+        <div id="freq-data">
+            <select id="frequency" name="frequency">
+              <option value="three-hrs">3 hours</option>
+              <option value="six-hrs">6 hours</option>
+              <option value="half-day">12 hours</option>
+              <option value="day">24 hours</option>
+              <option value="two-day">2 days</option>
+              <option value="week">1 week</option>
+            </select><br/ >
+          <input type="submit" value="Submit" />
+        </div>
+      </form>
+    </div>
   </body>
 </html>

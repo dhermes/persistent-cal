@@ -14,4 +14,5 @@ class UserCal(db.Model):
   calendars = db.StringListProperty(required=True)
   # http://code.google.com/appengine/docs/python/datastore/...
   #     ...typesandpropertyclasses.html#ListProperty
-  update_intervals = db.ListProperty(int, default=[], required=True)
+  # (int defaults to long, so I'll use long)
+  update_intervals = db.ListProperty(long, required=True)

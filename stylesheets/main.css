@@ -1,0 +1,56 @@
+/* Thanks to petelepage http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/ */
+#add-panel {
+  top: 150px;
+  border: 5px solid red;
+  background-color: #fcc;
+}
+
+#freq-panel {
+  top: 225px;
+  border: 5px solid green;
+  background-color: #cfc;
+}
+
+.panel {
+  width: 170px;
+  height: 45px;
+  position: fixed;
+  left: -145px; /* 25 - width */
+  border-radius: 0 1em 1em 0;
+  padding: 5px;
+  -webkit-transition: all 0.5s ease-in-out;
+  -moz-transition: all 0.5s ease-in-out;
+  -o-transition: all 0.5s ease-in-out;
+}
+
+.panel:hover {
+  left: -130px; /* 40 - width */
+}
+ 
+.panel.show {
+  left: -5px;
+}
+
+.panel .controller {
+  position: absolute;
+  text-decoration: none;
+  -webkit-transition: all 0.5s ease-in-out;
+  -moz-transition: all 0.5s ease-in-out;
+  -o-transition: all 0.5s ease-in-out;
+}
+
+.panel a.controller {
+  right: 5px;
+  top: 5px;
+}
+
+.panel div.controller {
+  right: 2px;
+  top: 25px;
+}
+
+.panel.show a.controller {
+  -webkit-transform: rotate(180deg);
+  -moz-transform: rotate(180deg);
+  -o-transform: rotate(180deg);
+}
