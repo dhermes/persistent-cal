@@ -49,7 +49,7 @@ class MainHandler(webapp.RequestHandler):
 
     template_vals = {'id': current_user.email(),
                      'calendars': simplejson.dumps(user_cal.calendars),
-                     'can_add': (len(calendars) < 4),
+                     'can_add': (len(user_cal.calendars) < 4),
                      'frequency': UpdateString(user_cal.update_intervals)}
 
     # TODO(dhermes) look up UserCal and populate subscriptions/frequency

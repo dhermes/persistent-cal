@@ -1,6 +1,7 @@
 # General libraries
 from datetime import datetime
 import pickle
+import simplejson
 from urllib2 import urlopen
 
 # Third-party libraries
