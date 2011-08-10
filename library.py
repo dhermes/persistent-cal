@@ -5,6 +5,8 @@ from urllib2 import urlopen
 
 # Third-party libraries
 import atom
+import gdata.gauth
+import gdata.calendar.client
 import gdata.calendar.data
 from icalendar import Calendar
 
@@ -13,7 +15,41 @@ from google.appengine.ext import db
 
 # App specific libraries
 from models import Event
+from secret_key import CONSUMER_KEY
+from secret_key import CONSUMER_SECRET
+from secret_key import TOKEN
+from secret_key import TOKEN_SECRET
 
+
+URI = ('https://www.google.com/calendar/feeds/'
+       'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
+RESPONSES = {1: ['once a week', 'week'],
+             4: ['every two days', 'tw-day'],
+             7: ['once a day', 'day'],
+             14: ['twice a day', 'half-day'],
+             28: ['every six hours', 'six-hrs'],
+             56: ['every three hours', 'three-hrs']}
+
+
+def UpdateString(update_intervals):
+  length = len(update_intervals)
+  if length not in RESPONSES:
+    raise Exception("Bad interval length")
+  else:
+    return simplejson.dumps(RESPONSES[length])
+
+
+def InitGCAL():
+  gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
+
+  auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
+                                          consumer_secret=CONSUMER_SECRET,
+                                          token=TOKEN,
+                                          token_secret=TOKEN_SECRET,
+                                          auth_state=3)
+
+  gcal.auth_token = auth_token
+  return gcal
 
 def ConvertToInterval(timestamp):
   # Monday 0, sunday 6
