@@ -83,6 +83,7 @@ class AddSubscription(webapp.RequestHandler):
     user_cal.put()
 
     if GCAL is None:
+      global GCAL
       GCAL = InitGCAL()
 
     UpdateSubscription(link, current_user, GCAL)
