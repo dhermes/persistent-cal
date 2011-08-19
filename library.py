@@ -2,6 +2,7 @@
 from datetime import datetime
 import pickle
 import simplejson
+from time import sleep
 from urllib2 import urlopen
 
 # Third-party libraries
@@ -9,6 +10,7 @@ import atom
 import gdata.gauth
 import gdata.calendar.client
 import gdata.calendar.data
+from gdata.client import RedirectError
 from icalendar import Calendar
 
 # App engine specific libraries
@@ -51,6 +53,7 @@ def InitGCAL():
 
   gcal.auth_token = auth_token
   return gcal
+
 
 def ConvertToInterval(timestamp):
   # Monday 0, sunday 6
@@ -101,17 +104,36 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
   event.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
 
   if update:
+    attempts = 3
     if push_update:
-      # TODO(dhermes) see if possible to manage this from feed
-      gcal.Update(event)
-    return event
+      while attempts:
+        try:
+          gcal.Update(event)
+          break
+        except RedirectError:
+          attempts -= 1
+          sleep(3)
+          pass
+
+    # Returns none if event did not get updated (if it needed to)
+    return event if attempts else None
   else: 
     # Who
     who_add = gdata.calendar.data.EventWho(email=event_data['email'])
     event.who.append(who_add)
 
     # TODO(dhermes) see if possible to manage this from feed
-    new_event = gcal.InsertEvent(event, insert_uri=URI)
+    attempts = 3
+    new_event = None
+    while attempts:
+      try:
+        new_event = gcal.InsertEvent(event, insert_uri=URI)
+        break
+      except RedirectError:
+        attempts -= 1
+        sleep(3)
+        pass
+
     return new_event
 
 
@@ -166,6 +188,9 @@ def UpdateSubscription(link, current_user, gcal):
         # (leaving out the event argument creates a new event)
         event_data['email'] = current_user.email()
         cal_event = AddOrUpdateEvent(event_data, gcal)
+        # TODO(dhermes) fail intelligently:
+        if cal_event is None:
+          continue
 
         gcal_edit = cal_event.get_edit_link().href
         event = Event(key_name=uid,
@@ -178,8 +203,22 @@ def UpdateSubscription(link, current_user, gcal):
         if (current_user_id not in event.who or
             db.Text(pickle.dumps(event_data)) != event.event_data):
           # Grab GCal event to edit
-          # TODO(dhermes) see if possible to manage this from feed
-          cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+          # TODO(dhermes) see if possible to manage this from feed, without
+          # having to make a new request
+          attempts = 3         
+          cal_event = None
+          while attempts:
+            try:
+              cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+              break
+            except RedirectError:
+              attempts -= 1
+              sleep(3)
+              pass
+
+          # TODO(dhermes) this is silently failing on one event in a loop
+          if cal_event is None:
+            continue
 
           # Update who
           if current_user_id not in event.who:
@@ -198,10 +237,21 @@ def UpdateSubscription(link, current_user, gcal):
                              gcal,
                              event=cal_event,
                              push_update=False)
+            # push_update=False, impossible to have RedirectError
 
           # Push all updates to calendar event
-          # TODO(dhermes) see if possible to manage this from feed
-          gcal.Update(cal_event)
+          attempts = 3
+          new_event = None
+          while attempts:
+            try:
+              gcal.Update(cal_event)
 
-          # After all possible changes to the Event instance have occurred
-          event.put()
+              # After all possible changes to the Event instance have occurred
+              event.put()
+              break
+            except RedirectError:
+              attempts -= 1
+              sleep(3)
+              pass
+
+          # TODO(dhermes) this is silently failing on one event in a loop
