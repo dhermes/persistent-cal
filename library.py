@@ -27,7 +27,7 @@ from secret_key import TOKEN_SECRET
 URI = ('https://www.google.com/calendar/feeds/'
        'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
 RESPONSES = {1: ['once a week', 'week'],
-             4: ['every two days', 'tw-day'],
+             4: ['every two days', 'two-day'],
              7: ['once a day', 'day'],
              14: ['twice a day', 'half-day'],
              28: ['every six hours', 'six-hrs'],

@@ -2,7 +2,6 @@
 from datetime import datetime
 import os
 import simplejson
-from urllib2 import urlparse
 
 # App engine specific libraries
 from google.appengine.api import users
@@ -49,7 +48,6 @@ class MainHandler(webapp.RequestHandler):
 
     template_vals = {'id': current_user.email(),
                      'calendars': simplejson.dumps(user_cal.calendars),
-                     'can_add': (len(user_cal.calendars) < 4),
                      'frequency': UpdateString(user_cal.update_intervals)}
 
     # TODO(dhermes) look up UserCal and populate subscriptions/frequency
@@ -66,7 +64,9 @@ class AddSubscription(webapp.RequestHandler):
     # TODO(dhermes): Add whitelist on adding for accepted providers
     # TODO(dhermes): Improve to take account for scheme (webcal not real scheme)
     link = self.request.get('calendar-link', '').strip()
-    link = 'http:%s' % urlparse.urlparse(link).path
+    webcal_alt = 'webcal://'
+    if link.startswith(webcal_alt):
+      link = '%s%s' % (webcal_alt, link[len(webcal_alt):])
 
     # TODO(dhermes): make sure user is logged in
     current_user = users.get_current_user()
@@ -82,8 +82,8 @@ class AddSubscription(webapp.RequestHandler):
 
     user_cal.put()
 
+    global GCAL
     if GCAL is None:
-      global GCAL
       GCAL = InitGCAL()
 
     UpdateSubscription(link, current_user, GCAL)
