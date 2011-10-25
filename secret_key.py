@@ -1,4 +1,4 @@
-CONSUMER_KEY = 'fake_key'
-CONSUMER_SECRET = 'fake_key_secret'
-TOKEN = 'fake_token'
-TOKEN_SECRET = 'fake_token_secret'
+CONSUMER_KEY = 'p'
+CONSUMER_SECRET = 'S'
+TOKEN = '1'
+TOKEN_SECRET = '0b'
