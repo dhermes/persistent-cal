@@ -1,6 +1,6 @@
 # General libraries
-from datetime import datetime
-import pickle
+import datetime
+import re
 import simplejson
 from time import sleep
 from urllib2 import urlopen
@@ -37,7 +37,7 @@ RESPONSES = {1: ['once a week', 'week'],
 def UpdateString(update_intervals):
   length = len(update_intervals)
   if length not in RESPONSES:
-    raise Exception("Bad interval length")
+    raise Exception('Bad interval length')
   else:
     return simplejson.dumps(RESPONSES[length])
 
@@ -74,15 +74,18 @@ def ConvertToInterval(timestamp):
 
 
 def FormatTime(time_value):
-  # Currently only expecting datetime.datetime or datetime.date
+  # Fails if not datetime.datetime or datetime.datetime
+  
+  # strftime('%Y-%m-%dT%H:%M:%S.000Z') works with both date and
+  # datetime instances
 
-  # strftime('%Y-%m-%dT%H:%M:%S.000Z')
-  # works with both date and datetime instances
+  # Default TZ is UTC/GMT (as is TZ in GCal)
   time_parse = '%Y-%m-%d'
-  if type(time_value) == datetime:
-    # Default is UTC/GMT
+  if isinstance(time_value, datetime.date):
+    return time_value.strftime(time_parse)
+  elif isinstance(time_value, datetime.datetime):
     time_parse += 'T%H:%M:%S.000Z'
-  return time_value.strftime(time_parse)
+    return time_value.strftime(time_parse)
 
 
 def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
@@ -99,8 +102,8 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
       value=event_data['location']))
 
   # When
-  start_time = FormatTime(event_data['when:from'])
-  end_time = FormatTime(event_data['when:to'])
+  start_time = event_data['when:from']
+  end_time = event_data['when:to']
   event.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
 
   if update:
@@ -163,8 +166,8 @@ def ParseEvent(event):
 
     description = 'In %s %s' % (location, description.split(target)[1])
 
-  event_data = {'when:from': event.get('dtstart').dt,
-                'when:to': event.get('dtend').dt,
+  event_data = {'when:from': FormatTime(event.get('dtstart').dt),
+                'when:to': FormatTime(event.get('dtend').dt),
                 'summary': unicode(event.get('summary')),
                 'location': location,
                 'description': description}
@@ -174,13 +177,21 @@ def ParseEvent(event):
 def UpdateSubscription(link, current_user, gcal):
   current_user_id = current_user.user_id()
 
+  # Transform link, whitelist
+  # ['webcal://www.tripit.com/feed/ical/private/{id}/tripit.ics']
+  pattern = ('^webcal://www.tripit.com/feed/ical/private/'
+             '[A-Za-z0-9-]+/tripit.ics$')
+  if re.match(pattern, link):
+    len_webcal = len('webcal')
+    link = 'http%s' % link[len_webcal:]
+
   import_feed = urlopen(link)
   ical = Calendar.from_string(import_feed.read())
   import_feed.close()
 
   for component in ical.walk():
     # TODO(dhermes) add calendar name to event data
-    if component.name == "VEVENT":
+    if component.name == 'VEVENT':
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
       if event is None:
@@ -195,13 +206,15 @@ def UpdateSubscription(link, current_user, gcal):
         gcal_edit = cal_event.get_edit_link().href
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
-                      event_data=db.Text(pickle.dumps(event_data)),
+                      event_data=db.Text(simplejson.dumps(event_data,
+                                                          ensure_ascii=True)),
                       gcal_edit=gcal_edit)
         event.put()
       else:
         # We need to make changes for new event data or a new owner
         if (current_user_id not in event.who or
-            db.Text(pickle.dumps(event_data)) != event.event_data):
+            (db.Text(simplejson.dumps(event_data, ensure_ascii=True)) != 
+             event.event_data)):
           # Grab GCal event to edit
           # TODO(dhermes) see if possible to manage this from feed, without
           # having to make a new request
@@ -229,8 +242,10 @@ def UpdateSubscription(link, current_user, gcal):
             cal_event.who.append(who_add)
 
           # Update existing event
-          if db.Text(pickle.dumps(event_data)) != event.event_data:
-            event.event_data = db.Text(pickle.dumps(event_data))
+          if (db.Text(simplejson.dumps(event_data, ensure_ascii=True)) !=
+              event.event_data):
+            event.event_data = db.Text(simplejson.dumps(event_data,
+                                                        ensure_ascii=True))
 
             # Don't push update to avoid pushing twice (if both changed)
             AddOrUpdateEvent(event_data,

@@ -35,7 +35,7 @@ class MainHandler(webapp.RequestHandler):
     """This handler is responsible for fetching an initial OAuth
     request token and redirecting the user to the approval page."""
 
-    # gauranteed to be a user since login_required
+    # guaranteed to be a user since login_required
     current_user = users.get_current_user()
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if user_cal is None:
@@ -61,12 +61,8 @@ class AddSubscription(webapp.RequestHandler):
     # TODO(dhermes), server timeout caused event added to Gcal, but not
     # added to the datastore
 
-    # TODO(dhermes): Add whitelist on adding for accepted providers
-    # TODO(dhermes): Improve to take account for scheme (webcal not real scheme)
+    # Whitelist applied by UpdateSubscription
     link = self.request.get('calendar-link', '').strip()
-    webcal_alt = 'webcal://'
-    if link.startswith(webcal_alt):
-      link = '%s%s' % (webcal_alt, link[len(webcal_alt):])
 
     # TODO(dhermes): make sure user is logged in
     current_user = users.get_current_user()
