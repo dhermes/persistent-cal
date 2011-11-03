@@ -54,3 +54,16 @@
   -moz-transform: rotate(180deg);
   -o-transform: rotate(180deg);
 }
+
+#footer {
+  position: absolute;
+  bottom: 0px;
+  width: 99%;
+  text-align: center;
+}
+
+#error {
+  position: absolute;
+  width: 99%;
+  text-align: center;
+}
