@@ -2,17 +2,32 @@
 <html>
   <head>
     <title>About Persistent Calendar</title>
-    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css"/>
   </head>
   <body>
     <div>
+      <p>This is what I like to call a &quot;missing feature&quot; of Google
+      Calendar. I was inspired</br>by the fact that my coworkers could not see
+      my flights with the rest of</br>my work calendar. Rather than sharing my
+      TripIt link with all my coworkers (even</br>those who I didn't know needed
+      my travel plans), why not just import my TripIt into</br>my work calendar?
+      But by using the &quot;Import Calendar&quot; option in Google</br>
+      Calendar, it is only a static upload and updates won't persist. Enter
+      <strong>persistant-cal</strong>!</p>
       <p>The following tries to cover some possible questions.</p>
       <ul>
         <li>You may only request up to four calendar feeds.</li>
-        <li>Only calendar feeds from a predefined whitelist will be used. All other feeds you supply will be ignored.</li>
-        <li>At this time, the whitelist is the following list of regular expressions:
+        <li>
+          Only calendar feeds from a predefined whitelist will be used. All other
+          feeds you supply will be ignored.
+        </li>
+        <li>
+          At this time, the whitelist is the following list of regular
+          expressions:
           <ul>
-            <li style="font-family:courier;">^webcal://www.tripit.com/feed/ical/private/[A-Za-z0-9-]+/tripit.ics$</li>
+            <li style="font-family:courier;">
+            ^webcal://www.tripit.com/feed/ical/private/[A-Za-z0-9-]+/tripit.ics$
+            </li>
           </ul>
         </li>
         <li>
