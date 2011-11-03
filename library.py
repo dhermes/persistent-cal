@@ -177,13 +177,16 @@ def ParseEvent(event):
 def UpdateSubscription(link, current_user, gcal):
   current_user_id = current_user.user_id()
 
-  # Transform link, whitelist
+  # Whitelist. May need to transform link
   # ['webcal://www.tripit.com/feed/ical/private/{id}/tripit.ics']
   pattern = ('^webcal://www.tripit.com/feed/ical/private/'
              '[A-Za-z0-9-]+/tripit.ics$')
   if re.match(pattern, link):
     len_webcal = len('webcal')
     link = 'http%s' % link[len_webcal:]
+  else:
+    # Do nothing if not on the whitelist
+    return
 
   import_feed = urlopen(link)
   ical = Calendar.from_string(import_feed.read())

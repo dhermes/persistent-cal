@@ -123,6 +123,14 @@ class OwnershipVerifyHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, {}))
 
 
+class AboutHandler(webapp.RequestHandler):
+  """Serves the static about page"""
+
+  def get(self):
+    path = os.path.join(os.path.dirname(__file__), 'templates', 'about.html')
+    self.response.out.write(template.render(path, {}))
+
+
 class Throw404(webapp.RequestHandler):
   """Catches all non-specified (404) requests"""
 
@@ -137,6 +145,7 @@ application = webapp.WSGIApplication([
   ('/add', AddSubscription),
   ('/freq', ChangeFrequency),
   ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
+  ('/about.html', AboutHandler),
   ('/.*', Throw404),
   ], debug=True)
 

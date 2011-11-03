@@ -16,3 +16,6 @@ class UserCal(db.Model):
   #     ...typesandpropertyclasses.html#ListProperty
   # (int defaults to long, so I'll use long)
   update_intervals = db.ListProperty(long, required=True)
+
+  # to be used for deletion
+  # upcoming = db.DateTimeProperty(required=True, auto_now=True)

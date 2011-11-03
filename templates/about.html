@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>About Persistent Calendar</title>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+  </head>
+  <body>
+    <div>
+      <p>The following tries to cover some possible questions.</p>
+      <ul>
+        <li>You may only request up to four calendar feeds.</li>
+        <li>Only calendar feeds from a predefined whitelist will be used. All other feeds you supply will be ignored.</li>
+        <li>At this time, the whitelist is the following list of regular expressions:
+          <ul>
+            <li style="font-family:courier;">^webcal://www.tripit.com/feed/ical/private/[A-Za-z0-9-]+/tripit.ics$</li>
+          </ul>
+        </li>
+        <li>
+          Each event in your calendar(s) will be added to a private general
+          purpose Google Calendar.
+        </li>
+        <li>
+          You will be added as an attendee to the events specific to your feeds,
+          but will not have edit privileges over the Google Calendar events.
+        </li>
+        <li>
+          If another user has a feed with the exact same ID, they will also be
+          added to the Google Calendar event.
+        </li>
+      </ul>
+    </div>
+    <div id="footer">
+      <p>Return to the <a href="/">main page</a>.</br>
+      persistent-cal is managed by Danny Hermes.</br>
+      Please contact dhermes@google.com for any questions.</p>
+    </div>
+  </body>
+</html>
+
