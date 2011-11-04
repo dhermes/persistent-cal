@@ -33,12 +33,12 @@ class Event(db.Model):
 class UserCal(db.Model):
   """Holds data for a calendar event (including shared owners)"""
   owner = db.UserProperty(required=True)
-  # hold public calendar link as strings
+  # hold calendar feed link as strings
   calendars = db.StringListProperty(required=True)
-  # http://code.google.com/appengine/docs/python/datastore/...
-  #     ...typesandpropertyclasses.html#ListProperty
-  # (int defaults to long, so I'll use long)
+  # See ('http://code.google.com/appengine/docs/python/datastore/'
+  #      'typesandpropertyclasses.html#ListProperty')
+  # int defaults to long, so I'll use long
   update_intervals = db.ListProperty(long, required=True)
 
   # TODO(dhermes) to be used for deletion
-  # upcoming = db.DateTimeProperty(required=True, auto_now=True)
+  upcoming = db.ListProperty(str, required=True)

@@ -112,10 +112,10 @@ def FormatTime(time_value):
 
   # Default TZ is UTC/GMT (as is TZ in GCal)
   time_parse = '%Y-%m-%d'
-  if isinstance(time_value, datetime.date):
-    return time_value.strftime(time_parse)
-  elif isinstance(time_value, datetime.datetime):
+  if isinstance(time_value, datetime.datetime):
     time_parse += 'T%H:%M:%S.000Z'
+    return time_value.strftime(time_parse)
+  elif isinstance(time_value, datetime.date):
     return time_value.strftime(time_parse)
 
 
