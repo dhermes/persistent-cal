@@ -3,9 +3,9 @@
   <head>
     <title>Persistent Calendar</title>
     <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
-    <script language="javascript" src="/javascripts/jquery-1.6.2.min.js" type="text/javascript"></script> 
+    <script src="/javascripts/jquery-1.6.2.min.js"></script>
     <script type="text/javascript">
-      // Thanks to petelepage http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/
+      // Thanks to pete lepage (see main.css for link)
       function togglePanel(prefix) {
         var elem = document.getElementById(prefix + "-panel");
         if (elem.classList) {
@@ -41,7 +41,19 @@
     }
 
     function reset(data) {
-      draw_cal(data);
+      var parsed_data = JSON.parse(data);
+
+      if (parsed_data === 'whitelist:fail') {
+        alert('Feed is not on whitelist');
+      } else if (parsed_data === 'limit:fail') {
+        alert('You have reached the maximum number of feeds.');
+      } else if (parsed_data === 'contained:fail') {
+        alert('You are already subscribed to this calendar feed.');
+      } else if (frequency === 'no_user:fail') {
+        alert('No user was provided.');
+      } else {
+        draw_cal(data);
+      }
 
       $('#calendar-link').val('');
       togglePanel('add');
@@ -50,12 +62,20 @@
     }
 
     function freq_set(data) {
-      var frequency = JSON.parse(data),
-          frequency_verbose = frequency[0],
-          frequency_val = frequency[1];
+      var frequency = JSON.parse(data);
 
-      $('#freq-val').html(frequency_verbose);
-      $('#frequency').val(frequency_val);
+      if (frequency === 'no_cal:fail') {
+        alert('You have no calendar to update.');
+      } else if (frequency === 'wrong_freq:fail') {
+        alert('That is not a valid frequency.');
+      } else if (frequency === 'no_user:fail') {
+        alert('No user was provided.');
+      } else {
+        var frequency_verbose = frequency[0],
+            frequency_val = frequency[1];
+        $('#freq-val').html(frequency_verbose);
+        $('#frequency').val(frequency_val);
+      }
 
       return false;
     }
@@ -101,7 +121,9 @@
         <td>
           <table id="subscriptions">
             <tr id="subscriptions-row" style="display:none">
-              <td style="border-bottom-style:solid; border-bottom-width:1px;">Your subscriptions</td>
+              <td style="border-bottom-style:solid; border-bottom-width:1px;">
+                Your subscriptions
+              </td>
             </tr>
             <tr><td id="cal-0"></td></tr>
             <tr><td id="cal-1"></td></tr>
@@ -111,12 +133,14 @@
         </td>
       </tr>
       <tr>
-        <td style="border-top-style:solid; border-top-width:1px;" colspan="2">Your subscriptions will be updated <text id="freq-val"></text>.</td>
+        <td style="border-top-style:solid; border-top-width:1px;" colspan="2">
+          Your subscriptions will be updated <text id="freq-val"></text>.
+        </td>
       </tr>
     </table>
 
     <div id="add-panel" class="panel">
-<!--     Thanks to petelepage http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/ -->
+      <!-- Thanks to pete lepage (see main.css for link) -->
       <a href="#" onclick="togglePanel('add');" class="controller">&gt;</a>
       <div class="controller">ADD</div>
       <form id="add">

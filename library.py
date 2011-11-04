@@ -1,3 +1,26 @@
+#!/usr/bin/python
+
+# Copyright (C) 2010-2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+"""Extended function library for request handlers for persistent-cal"""
+
+
+__author__ = 'dhermes@google.com (Daniel Hermes)'
+
+
 # General libraries
 import datetime
 import re
@@ -34,7 +57,12 @@ RESPONSES = {1: ['once a week', 'week'],
              56: ['every three hours', 'three-hrs']}
 
 
+def JsonAscii(obj):
+  """Returns an object in JSON with ensure_ascii explicitly set True"""
+  return simplejson.dumps(obj, ensure_ascii=True)
+
 def UpdateString(update_intervals):
+  """Returns a JSON object to represent the frequency of updates"""
   length = len(update_intervals)
   if length not in RESPONSES:
     raise Exception('Bad interval length')
@@ -43,6 +71,7 @@ def UpdateString(update_intervals):
 
 
 def InitGCAL():
+  """Initializes a calendar client based on a stored auth token"""
   gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
 
   auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
@@ -56,6 +85,7 @@ def InitGCAL():
 
 
 def ConvertToInterval(timestamp):
+  """Converts a datetime timestamp to a time interval for a cron job"""
   # Monday 0, sunday 6
   # 8 intervals in a day, round up hours
   interval = 8*timestamp.weekday() + timestamp.hour/3 + 1
@@ -74,8 +104,9 @@ def ConvertToInterval(timestamp):
 
 
 def FormatTime(time_value):
+  """Takes a datetime object and returns a formatted time stamp"""
   # Fails if not datetime.datetime or datetime.datetime
-  
+
   # strftime('%Y-%m-%dT%H:%M:%S.000Z') works with both date and
   # datetime instances
 
@@ -88,8 +119,30 @@ def FormatTime(time_value):
     return time_value.strftime(time_parse)
 
 
+def WhiteList(link):
+  """Determines if a link is on the whitelist and transforms it if needed"""
+  # If we WhiteList is updated, ParseEvent must be as well
+  valid = False
+  transformed = link
+  
+  pattern_webcal = ('^webcal://www.tripit.com/feed/ical/private/'
+                    '[A-Za-z0-9-]+/tripit.ics$')
+  pattern_http = ('^http://www.tripit.com/feed/ical/private/'
+                  '[A-Za-z0-9-]+/tripit.ics$')
+  if re.match(pattern_webcal, link):
+    valid = True
+
+    len_webcal = len('webcal')
+    transformed = 'http%s' % link[len_webcal:]
+  elif re.match(pattern_http, link):
+    valid = True
+    transformed = link
+
+  return valid, transformed
+
+
 def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
-  # Create event in user's calendar
+  """Create event in main application calendar and add user as attendee"""
   update = (event is not None)
   if not update:
     event = gdata.calendar.data.CalendarEventEntry()
@@ -120,12 +173,11 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
 
     # Returns none if event did not get updated (if it needed to)
     return event if attempts else None
-  else: 
+  else:
     # Who
     who_add = gdata.calendar.data.EventWho(email=event_data['email'])
     event.who.append(who_add)
 
-    # TODO(dhermes) see if possible to manage this from feed
     attempts = 3
     new_event = None
     while attempts:
@@ -142,7 +194,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
 
 def ParseEvent(event):
   # Assumes event is type icalendar.cal.Event
-  
+
   # all events have a UID, and almost all begin with 'item-';
   # those that don't are an away event for the entire trip
   uid = unicode(event.get('uid'))
@@ -161,7 +213,7 @@ def ParseEvent(event):
   if not uid.startswith('item-'):
     target = ' is in %s ' % location
     if description.count(target) != 1:
-      # TODO(dhermes) log and fail silently
+      # Since whitelisted, we expect the same format
       raise Exception('Unrecognized event format')
 
     description = 'In %s %s' % (location, description.split(target)[1])
@@ -177,14 +229,8 @@ def ParseEvent(event):
 def UpdateSubscription(link, current_user, gcal):
   current_user_id = current_user.user_id()
 
-  # Whitelist. May need to transform link
-  # ['webcal://www.tripit.com/feed/ical/private/{id}/tripit.ics']
-  pattern = ('^webcal://www.tripit.com/feed/ical/private/'
-             '[A-Za-z0-9-]+/tripit.ics$')
-  if re.match(pattern, link):
-    len_webcal = len('webcal')
-    link = 'http%s' % link[len_webcal:]
-  else:
+  valid, link = WhiteList(link)
+  if not valid:
     # Do nothing if not on the whitelist
     return
 
@@ -193,7 +239,6 @@ def UpdateSubscription(link, current_user, gcal):
   import_feed.close()
 
   for component in ical.walk():
-    # TODO(dhermes) add calendar name to event data
     if component.name == 'VEVENT':
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
@@ -202,26 +247,22 @@ def UpdateSubscription(link, current_user, gcal):
         # (leaving out the event argument creates a new event)
         event_data['email'] = current_user.email()
         cal_event = AddOrUpdateEvent(event_data, gcal)
-        # TODO(dhermes) fail intelligently:
+        # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           continue
 
         gcal_edit = cal_event.get_edit_link().href
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
-                      event_data=db.Text(simplejson.dumps(event_data,
-                                                          ensure_ascii=True)),
+                      event_data=db.Text(JsonAscii(event_data)),
                       gcal_edit=gcal_edit)
         event.put()
       else:
         # We need to make changes for new event data or a new owner
         if (current_user_id not in event.who or
-            (db.Text(simplejson.dumps(event_data, ensure_ascii=True)) != 
-             event.event_data)):
+            db.Text(JsonAscii(event_data)) != event.event_data):
           # Grab GCal event to edit
-          # TODO(dhermes) see if possible to manage this from feed, without
-          # having to make a new request
-          attempts = 3         
+          attempts = 3
           cal_event = None
           while attempts:
             try:
@@ -232,7 +273,7 @@ def UpdateSubscription(link, current_user, gcal):
               sleep(3)
               pass
 
-          # TODO(dhermes) this is silently failing on one event in a loop
+          # TODO(dhermes) add to failed queue to be updated by a cron
           if cal_event is None:
             continue
 
@@ -245,10 +286,8 @@ def UpdateSubscription(link, current_user, gcal):
             cal_event.who.append(who_add)
 
           # Update existing event
-          if (db.Text(simplejson.dumps(event_data, ensure_ascii=True)) !=
-              event.event_data):
-            event.event_data = db.Text(simplejson.dumps(event_data,
-                                                        ensure_ascii=True))
+          if db.Text(JsonAscii(event_data)) != event.event_data:
+            event.event_data = db.Text(JsonAscii(event_data))
 
             # Don't push update to avoid pushing twice (if both changed)
             AddOrUpdateEvent(event_data,
@@ -272,4 +311,4 @@ def UpdateSubscription(link, current_user, gcal):
               sleep(3)
               pass
 
-          # TODO(dhermes) this is silently failing on one event in a loop
+          # TODO(dhermes) fix silent failure here
