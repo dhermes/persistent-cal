@@ -2,14 +2,20 @@
 http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/ */
 #add-panel {
   top: 150px;
-  border: 5px solid red;
-  background-color: #fcc;
+  border: 5px solid blue;
+  background-color: #ccf;
 }
 
 #freq-panel {
   top: 225px;
   border: 5px solid green;
   background-color: #cfc;
+}
+
+#alert-panel {
+  top: 440px;
+  border: 5px solid red;
+  background-color: #fcc;
 }
 
 .panel {
@@ -63,8 +69,6 @@ http://petelepage.com/blog/2011/07/showing-hiding-panels-with-html-and-css/ */
   text-align: center;
 }
 
-#error {
-  position: absolute;
-  width: 99%;
-  text-align: center;
+a:visited {
+  color: #000000;
 }

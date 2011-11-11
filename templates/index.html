@@ -44,13 +44,13 @@
       var parsed_data = JSON.parse(data);
 
       if (parsed_data === 'whitelist:fail') {
-        alert('Feed is not on whitelist');
+        spawnAlert('Feed is not on whitelist.');
       } else if (parsed_data === 'limit:fail') {
-        alert('You have reached the maximum number of feeds.');
+        spawnAlert('You have reached the maximum number of feeds.');
       } else if (parsed_data === 'contained:fail') {
-        alert('You are already subscribed to this calendar feed.');
+        spawnAlert('You are already subscribed to this calendar feed.');
       } else if (frequency === 'no_user:fail') {
-        alert('No user was provided.');
+        spawnAlert('No user was provided.');
       } else {
         draw_cal(data);
       }
@@ -65,11 +65,11 @@
       var frequency = JSON.parse(data);
 
       if (frequency === 'no_cal:fail') {
-        alert('You have no calendar to update.');
+        spawnAlert('You have no calendar to update.');
       } else if (frequency === 'wrong_freq:fail') {
-        alert('That is not a valid frequency.');
+        spawnAlert('That is not a valid frequency.');
       } else if (frequency === 'no_user:fail') {
-        alert('No user was provided.');
+        spawnAlert('No user was provided.');
       } else {
         var frequency_verbose = frequency[0],
             frequency_val = frequency[1];
@@ -85,6 +85,50 @@
       togglePanel('freq');
 
       return false;
+    }
+
+    function removeAlert() {
+      togglePanel('alert');
+
+      function removeElt() {
+        $('#alert-panel').remove();
+      }
+      // TODO(dhermes), make the transition to 0 px rather
+      // than to -145px
+      // alert_div.css('left', (-width) + 'px');
+      setTimeout("$('#alert-panel').remove()", 500);
+    }
+
+    function spawnAlert(text) {
+      // first check if one exists, and remove it if it has not been
+      var alert = $('#alert-panel');
+      if (alert.length) {
+        removeAlert();
+      }
+
+      var container = $('#alerts'),
+          alert_div = $(document.createElement('div')),
+          alert_text = $(document.createElement('span')),
+          alert_anchor = $(document.createElement('a'));
+      alert_text.text(text);
+      alert_text.css('position', 'relative');
+      alert_text.css('top', '12px');
+      alert_div.append(alert_text);
+      alert_div.attr('id', 'alert-panel');
+      alert_div.addClass('panel');
+
+      alert_anchor.attr('href', '#');
+      alert_anchor.attr('onclick', 'removeAlert();');
+      alert_anchor.addClass('controller');
+      alert_anchor.text('X')
+      alert_div.append(alert_anchor);
+
+      container.append(alert_div);
+      // max(text_length, 170) since 170 is the standard
+      var width = Math.max(140, alert_text.get(0).offsetWidth) + 30;
+      alert_div.width(width);
+
+      togglePanel('alert');
     }
 
     $(window).load(function () {
@@ -113,7 +157,7 @@
     </script>
   </head>
   <body>
-    <table>
+    <table id="status-table">
       <tr>
         <td style="border-right-style:solid; border-right-width:1px;">
           Hello {{ id }}. </br> Thanks for signing up.
@@ -150,6 +194,7 @@
         </div>
       </form>
     </div>
+
     <div id="freq-panel" class="panel">
       <a href="#" onclick="togglePanel('freq');" class="controller">&gt;</a>
       <div class="controller">CHG</div>
@@ -167,6 +212,9 @@
         </div>
       </form>
     </div>
+
+    <div id="alerts"></div>
+
     <div id="footer">
       <p><a href="/about.html">About</a></br>
       persistent-cal is managed by Danny Hermes.</br>

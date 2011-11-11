@@ -21,8 +21,20 @@
 __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
+# General libraries
 import simplejson
-from library import InitGCAL
+
+# Third-party libraries
+import gdata.gauth
+import gdata.calendar.client
+
+# App specific libraries
+# from library import InitGCAL
+from secret_key import CONSUMER_KEY
+from secret_key import CONSUMER_SECRET
+from secret_key import TOKEN
+from secret_key import TOKEN_SECRET
+
 
 def main():
   """
@@ -31,6 +43,10 @@ def main():
   get_calendar_event_feed uses a default desired_class of
   `gdata.calendar.data.CalendarEventFeed`
   hence the get_feed request uses this class to convert the response
+
+  In order to retrieve the full feed, the total_results field is analyzed
+  from the first request and a new request is sent with max-results set in
+  the query to the total number of events.
 
   The CalendarEventFeed class has an event field which holds a list of
   CalendarEventEntry classes. Each CalendarEventEntry class has a when field
@@ -42,19 +58,32 @@ def main():
   addresses of the attendees from the who field to a dictionary. This dictionary
   is then written to a file as serialized JSON.
   """
+  # TODO(dhermes) fix the import issue for the authorized client
+  # InitGCAL won't import since library.py has app engine imports
+  # GCAL = InitGCAL()
+  GCAL = gdata.calendar.client.CalendarClient(source='persistent-cal')
+  auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
+                                          consumer_secret=CONSUMER_SECRET,
+                                          token=TOKEN,
+                                          token_secret=TOKEN_SECRET,
+                                          auth_state=3)
+  GCAL.auth_token = auth_token
+
 
   URI = ('https://www.google.com/calendar/feeds/'
          'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
-  GCAL = InitGCAL()
   feed = GCAL.get_calendar_event_feed(uri=URI)
+  total_results = int(feed.total_results.text) # TODO(dhermes) catch error here
+  if total_results > 25:
+    URI = '%s?max-results=%s' % (URI, total_results)
+    feed = GCAL.get_calendar_event_feed(uri=URI)
 
   result = {}
   for event in feed.entry:
     # each event is [CalendarEventEntry]
-    when = event.when
-    # when is [When]
-    curr_start = when.start # string
-    curr_end = when.end # string
+    when = event.when # when is [When]
+    curr_starts = [t.start for t in when] # [string]
+    curr_ends = [t.end for t in when] # [string]
     # who is [gdata.data.Who]
     who = [v.email for v in event.who]
     # each v.email is string
@@ -62,8 +91,8 @@ def main():
     if gcal_edit in result:
       raise Exception('Hmmmmmmm, duplicate')
     else:
-      result[gcal_edit] = {'start': curr_start,
-                           'end': curr_end,
+      result[gcal_edit] = {'starts': curr_starts,
+                           'ends': curr_ends,
                            'who': who}
 
 
