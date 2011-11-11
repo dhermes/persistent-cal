@@ -39,6 +39,4 @@ class UserCal(db.Model):
   #      'typesandpropertyclasses.html#ListProperty')
   # int defaults to long, so I'll use long
   update_intervals = db.ListProperty(long, required=True)
-
-  # TODO(dhermes) to be used for deletion
   upcoming = db.ListProperty(str, required=True)

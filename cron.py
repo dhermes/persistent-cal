@@ -31,6 +31,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 # App specific libraries
 from library import ConvertToInterval
 from library import InitGCAL
+from library import UpdateUpcoming
 from library import UpdateSubscription
 from models import UserCal
 
@@ -44,11 +45,14 @@ class MainHandler(webapp.RequestHandler):
 
     all_users = UserCal.all()
     for user in all_users:
+      upcoming = []
       if now in user.update_intervals:
         for link in user.calendars:
           if GCAL is None:
             GCAL = InitGCAL()
-          UpdateSubscription(link, user.owner, GCAL)
+          upcoming.extend(UpdateSubscription(link, user.owner, GCAL))
+
+        UpdateUpcoming(user, upcoming, GCAL)
 
 
 application = webapp.WSGIApplication([

@@ -23,6 +23,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
+import logging
 import re
 import simplejson
 from time import sleep
@@ -107,8 +108,8 @@ def FormatTime(time_value):
   """Takes a datetime object and returns a formatted time stamp"""
   # Fails if not datetime.datetime or datetime.datetime
 
-  # strftime('%Y-%m-%dT%H:%M:%S.000Z') works with both date and
-  # datetime instances
+  # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
+  # strftime('%Y-%m-%d') for date
 
   # Default TZ is UTC/GMT (as is TZ in GCal)
   time_parse = '%Y-%m-%d'
@@ -117,6 +118,37 @@ def FormatTime(time_value):
     return time_value.strftime(time_parse)
   elif isinstance(time_value, datetime.date):
     return time_value.strftime(time_parse)
+
+
+def TimeToDTStamp(time_as_str):
+  """Takes time as string and returns a datetime object"""
+  # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
+  # strftime('%Y-%m-%d') for date
+
+  # Default TZ is UTC/GMT
+  time_parse = '%Y-%m-%d'
+  try:
+    converted_val = datetime.datetime.strptime(time_parse)
+    return converted_val
+  except ValueError:
+    pass
+    
+  time_parse += 'T%H:%M:%S.000Z'
+  try:
+    converted_val = datetime.datetime.strptime(time_parse)
+    return converted_val
+  except ValueError:
+    pass
+
+
+def RemoveTimezone(time_value):
+  """Takes a datetime object and removes the timezone"""
+  if isinstance(time_value, datetime.datetime):
+    if time_value.tzinfo is not None:
+      time_parse = '%Y-%m-%dT%H:%M:%S.%fZ'
+      time_value = time_value.strftime(time_parse) # TZ is lost
+      time_value = datetime.datetime.strptime(time_value, time_parse)
+  return time_value
 
 
 def WhiteList(link):
@@ -193,6 +225,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
 
 
 def ParseEvent(event):
+  """Parses an iCalendar.cal.Event instance to a predefined format"""
   # Assumes event is type icalendar.cal.Event
 
   # all events have a UID, and almost all begin with 'item-';
@@ -227,19 +260,30 @@ def ParseEvent(event):
 
 
 def UpdateSubscription(link, current_user, gcal):
+  """
+  Updates the GCal instance with the events in link for the current_user
+
+  Returns a list of all uid's for events which have yet to occur (can be used
+  to delete removed events)
+  """
+  result = []
   current_user_id = current_user.user_id()
 
   valid, link = WhiteList(link)
   if not valid:
     # Do nothing if not on the whitelist
-    return
+    return result
 
   import_feed = urlopen(link)
   ical = Calendar.from_string(import_feed.read())
   import_feed.close()
 
+  now = datetime.datetime.utcnow()
   for component in ical.walk():
-    if component.name == 'VEVENT':
+    if component.name != 'VEVENT':
+      logging.info('iCal at % has unexpected event type %s' % (
+        link, component.name))
+    else:
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
       if event is None:
@@ -257,6 +301,11 @@ def UpdateSubscription(link, current_user, gcal):
                       event_data=db.Text(JsonAscii(event_data)),
                       gcal_edit=gcal_edit)
         event.put()
+
+        # execution has successfully completed
+        # TODO(dhermes) catch error on get call below
+        if RemoveTimezone(component.get('dtend').dt) > now:
+          result.append(uid)
       else:
         # We need to make changes for new event data or a new owner
         if (current_user_id not in event.who or
@@ -311,4 +360,34 @@ def UpdateSubscription(link, current_user, gcal):
               sleep(3)
               pass
 
-          # TODO(dhermes) fix silent failure here
+          # If attempts is 0, we have failed and don't want to add the
+          # uid to results
+          if attempts == 0:
+            continue
+
+        # execution has successfully completed
+        # TODO(dhermes) catch error on get call below
+        if RemoveTimezone(component.get('dtend').dt) > now:
+          result.append(uid)
+
+  return result
+
+
+def UpdateUpcoming(user_cal, upcoming, gcal):
+  """
+  Updates the GCal instance by deleting pending events removed from ext calendar
+
+  If the new upcoming events list is different from that on the user_cal, it
+  will iterate through the difference and delete those events that have not yet
+  passed which are still on the calendar.
+  """
+  if user_cal.upcoming != upcoming:
+    now = datetime.datetime.utcnow()
+    for uid in set(user_cal.upcoming).difference(upcoming):
+      event = Event.get_by_key_name(uid)
+      event_data = simplejson.loads(event.event_data)
+      if TimeToDTStamp(event_data['when:to']) > now:
+        gcal.delete(event.gcal_edit, force=True)
+        event.delete()
+    user_cal.upcoming = upcoming
+    user_cal.put()
