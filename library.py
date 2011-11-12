@@ -281,7 +281,7 @@ def UpdateSubscription(link, current_user, gcal):
   now = datetime.datetime.utcnow()
   for component in ical.walk():
     if component.name != 'VEVENT':
-      logging.info('iCal at % has unexpected event type %s' % (
+      logging.info('iCal at %s has unexpected event type %s' % (
         link, component.name))
     else:
       uid, event_data = ParseEvent(component)
@@ -391,13 +391,3 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
         event.delete()
     user_cal.upcoming = upcoming
     user_cal.put()
-
-import simplejson
-with open('db_events.json', 'rb') as fh:
-  data = simplejson.load(fh)
-for key, value in data.items():
-  event_data = simplejson.loads(value['event_data'])
-  print event_data['when:to']
-  print TimeToDTStamp(event_data['when:to']), '\n'
-  print event_data['when:from']
-  print TimeToDTStamp(event_data['when:from']), '\n'
