@@ -21,3 +21,7 @@ handlers:
 
 - url: /.*
   script: main.py
+
+builtins:
+# for the remote datastore calls
+- remote_api: on
