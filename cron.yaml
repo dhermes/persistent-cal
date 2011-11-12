@@ -2,4 +2,3 @@ cron:
 - description: calendar check job
   url: /cron
   schedule: every 3 hours synchronized
-  login: admin

@@ -128,14 +128,14 @@ def TimeToDTStamp(time_as_str):
   # Default TZ is UTC/GMT
   time_parse = '%Y-%m-%d'
   try:
-    converted_val = datetime.datetime.strptime(time_parse)
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
     return converted_val
   except ValueError:
     pass
     
   time_parse += 'T%H:%M:%S.000Z'
   try:
-    converted_val = datetime.datetime.strptime(time_parse)
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
     return converted_val
   except ValueError:
     pass
@@ -391,3 +391,13 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
         event.delete()
     user_cal.upcoming = upcoming
     user_cal.put()
+
+import simplejson
+with open('db_events.json', 'rb') as fh:
+  data = simplejson.load(fh)
+for key, value in data.items():
+  event_data = simplejson.loads(value['event_data'])
+  print event_data['when:to']
+  print TimeToDTStamp(event_data['when:to']), '\n'
+  print event_data['when:from']
+  print TimeToDTStamp(event_data['when:from']), '\n'
