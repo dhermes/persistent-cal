@@ -40,6 +40,7 @@ class MainHandler(webapp.RequestHandler):
 
   def get(self):
     """Updates every three hours."""
+    # TODO(dhermes) Check header for X-AppEngine-Cron: true
     now = ConvertToInterval(datetime.utcnow())
     GCAL = None
 
