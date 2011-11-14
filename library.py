@@ -393,7 +393,11 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
       event = Event.get_by_key_name(uid)
       event_data = simplejson.loads(event.event_data)
       if TimeToDTStamp(event_data['when:to']) > now:
-        gcal.delete(event.gcal_edit, force=True)
-        event.delete()
+        event.who.remove(user_cal.owner.user_id())
+        if not event.who:
+          gcal.delete(event.gcal_edit, force=True)
+          event.delete()
+        else:
+          event.put()
     user_cal.upcoming = upcoming
     user_cal.put()
