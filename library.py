@@ -148,6 +148,12 @@ def RemoveTimezone(time_value):
       time_parse = '%Y-%m-%dT%H:%M:%S.%fZ'
       time_value = time_value.strftime(time_parse) # TZ is lost
       time_value = datetime.datetime.strptime(time_value, time_parse)
+  elif isinstance(time_value, datetime.date):
+    # convert to datetime.datetime object for comparison
+    time_value = datetime.datetime(year=time_value.year,
+                                   month=time_value.month,
+                                   day=time_value.day)
+
   return time_value
 
 
