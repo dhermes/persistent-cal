@@ -145,7 +145,7 @@ def RemoveTimezone(time_value):
   """Takes a datetime object and removes the timezone"""
   if isinstance(time_value, datetime.datetime):
     if time_value.tzinfo is not None:
-      time_parse = '%Y-%m-%dT%H:%M:%S.%fZ'
+      time_parse = '%Y-%m-%dT%H:%M:%S.000Z'
       time_value = time_value.strftime(time_parse) # TZ is lost
       time_value = datetime.datetime.strptime(time_value, time_parse)
   elif isinstance(time_value, datetime.date):
