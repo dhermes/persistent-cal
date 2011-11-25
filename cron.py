@@ -31,8 +31,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 # App specific libraries
 from library import ConvertToInterval
 from library import InitGCAL
-from library import UpdateUpcoming
-from library import UpdateSubscription
+from library import UpdateUserSubscriptions
 from models import UserCal
 
 
@@ -44,16 +43,17 @@ class MainHandler(webapp.RequestHandler):
     now = ConvertToInterval(datetime.utcnow())
     GCAL = None
 
+    # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
+    #               that all_users becomes to big to set off background tasks
+    # from google.appengine.runtime import DeadlineExceededError
+    # from google.appengine.ext import deferred
     all_users = UserCal.all()
-    for user in all_users:
-      upcoming = []
-      if now in user.update_intervals:
-        for link in user.calendars:
-          if GCAL is None:
-            GCAL = InitGCAL()
-          upcoming.extend(UpdateSubscription(link, user.owner, GCAL))
-
-        UpdateUpcoming(user, upcoming, GCAL)
+    for user_cal in all_users:
+      if now in user_cal.update_intervals:
+        if GCAL is None:
+          GCAL = InitGCAL()
+        UpdateUserSubscriptions(user_cal.calendars, user_cal,
+                                GCAL, defer_now=True)
 
 
 application = webapp.WSGIApplication([

@@ -23,5 +23,7 @@ handlers:
   script: main.py
 
 builtins:
-# for the remote datastore calls
+# for remote datastore calls
 - remote_api: on
+# for deferring cron requests to task queue
+- deferred: on

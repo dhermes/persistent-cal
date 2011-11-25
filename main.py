@@ -38,7 +38,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 from library import ConvertToInterval
 from library import InitGCAL
 from library import UpdateString
-from library import UpdateSubscription
+from library import UpdateUserSubscriptions
 from library import WhiteList
 from models import UserCal
 
@@ -152,7 +152,7 @@ class AddSubscription(webapp.RequestHandler):
     #               error and still leave this function. Also within UpSc,
     #               make sure all events that are added to GCal are also added
     #               to the datastore.
-    UpdateSubscription(link, current_user, GCAL)
+    UpdateUserSubscriptions([link], user_cal, GCAL, defer_now=True)
     self.response.out.write(simplejson.dumps(user_cal.calendars))
 
 

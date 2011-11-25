@@ -39,6 +39,8 @@ from icalendar import Calendar
 
 # App engine specific libraries
 from google.appengine.ext import db
+from google.appengine.ext.deferred import defer
+from google.appengine.runtime import DeadlineExceededError
 
 # App specific libraries
 from models import Event
@@ -265,27 +267,101 @@ def ParseEvent(event):
   return uid, event_data
 
 
-def UpdateSubscription(link, current_user, gcal):
+def UpdateUpcoming(user_cal, upcoming, gcal):
+  """
+  Updates the GCal instance by deleting pending events removed from ext calendar
+
+  If the new upcoming events list is different from that on the user_cal, it
+  will iterate through the difference and delete those events that have not yet
+  passed which are still on the calendar.
+  """
+  if set(user_cal.upcoming) != set(upcoming):
+    now = datetime.datetime.utcnow()
+    for uid in set(user_cal.upcoming).difference(upcoming):
+      event = Event.get_by_key_name(uid)
+      event_data = simplejson.loads(event.event_data)
+      if TimeToDTStamp(event_data['when:to']) > now:
+        event.who.remove(user_cal.owner.user_id())
+        if not event.who:
+          gcal.delete(event.gcal_edit, force=True)
+          event.delete()
+        else:
+          event.put()
+    user_cal.upcoming = list(set(upcoming))
+    user_cal.put()
+
+#######################################
+
+def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
+                            defer_now=False, start={}):
+  if defer_now:
+    # TODO(dhermes) Can I use named arguments?
+    defer(UpdateUserSubscriptions,
+          links, user_cal, gcal,
+          upcoming, False, start)
+    return
+
+  # Set variables to pick up where the loop left off in case of DLExcError
+  index = 0
+  uid = None
+
+  try:
+    for index, link in enumerate(links):
+      # In the case a uid is not None, we are picking up in the middle
+      # if the feed for the first link
+      if index == 0 and link == start.get('link', '') and 'uid' in start:
+        uid_generator = UpdateSubscription(link, user_cal.owner,
+                                           gcal, start_uid=start['uid'])
+      else:
+        uid_generator = UpdateSubscription(link, user_cal.owner, gcal)
+
+      for uid, is_upcoming, failed in uid_generator:
+        if is_upcoming:
+          upcoming.append(uid)
+        elif failed:
+          logging.info('failed %s from %s' % (uid, link))
+  except DeadlineExceededError:
+    # update links to account for progress
+    # upcoming is also updated along the way
+    links = links[index:]
+    start = {'uid': uid, 'link': links[0]}
+    # TODO(dhermes) Can I use named arguments?
+    defer(UpdateUserSubscriptions,
+          links, user_cal, gcal,
+          upcoming, defer_now, start)
+  
+  # If the loop completes without timing out
+  defer(UpdateUpcoming, user_cal, upcoming, gcal)
+  return
+
+
+def UpdateSubscription(link, current_user, gcal, start_uid=None):
   """
   Updates the GCal instance with the events in link for the current_user
 
-  Returns a list of all uid's for events which have yet to occur (can be used
-  to delete removed events)
+  Returns a generator instance which yields (uid, bool) tuples where bool
+  is true if the event at uid is upcoming
   """
-  result = []
   current_user_id = current_user.user_id()
 
   valid, link = WhiteList(link)
   if not valid:
     # Do nothing if not on the whitelist
-    return result
+    return
 
   import_feed = urlopen(link)
   ical = Calendar.from_string(import_feed.read())
   import_feed.close()
 
   now = datetime.datetime.utcnow()
-  for component in ical.walk():
+
+  start_index = 0
+  if start_uid is not None:
+    uid_list = [component.get('uid', '') for component in ical.walk()]
+    if uid_list.count(start_uid) > 0:
+      start_index = uid_list.index(start_uid)
+
+  for component in ical.walk()[start_index:]:
     if component.name != 'VEVENT':
       logging.info('iCal at %s has unexpected event type %s' % (
         link, component.name))
@@ -299,6 +375,7 @@ def UpdateSubscription(link, current_user, gcal):
         cal_event = AddOrUpdateEvent(event_data, gcal)
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
+          yield (uid, False, True)
           continue
 
         gcal_edit = cal_event.get_edit_link().href
@@ -310,8 +387,7 @@ def UpdateSubscription(link, current_user, gcal):
 
         # execution has successfully completed
         # TODO(dhermes) catch error on get call below
-        if RemoveTimezone(component.get('dtend').dt) > now:
-          result.append(uid)
+        yield (uid, RemoveTimezone(component.get('dtend').dt) > now, False)
       else:
         # We need to make changes for new event data or a new owner
         if (current_user_id not in event.who or
@@ -330,6 +406,7 @@ def UpdateSubscription(link, current_user, gcal):
 
           # TODO(dhermes) add to failed queue to be updated by a cron
           if cal_event is None:
+            yield (uid, False, True)
             continue
 
           # Update who
@@ -369,35 +446,9 @@ def UpdateSubscription(link, current_user, gcal):
           # If attempts is 0, we have failed and don't want to add the
           # uid to results
           if attempts == 0:
+            yield (uid, False, True)
             continue
 
         # execution has successfully completed
         # TODO(dhermes) catch error on get call below
-        if RemoveTimezone(component.get('dtend').dt) > now:
-          result.append(uid)
-
-  return result
-
-
-def UpdateUpcoming(user_cal, upcoming, gcal):
-  """
-  Updates the GCal instance by deleting pending events removed from ext calendar
-
-  If the new upcoming events list is different from that on the user_cal, it
-  will iterate through the difference and delete those events that have not yet
-  passed which are still on the calendar.
-  """
-  if user_cal.upcoming != upcoming:
-    now = datetime.datetime.utcnow()
-    for uid in set(user_cal.upcoming).difference(upcoming):
-      event = Event.get_by_key_name(uid)
-      event_data = simplejson.loads(event.event_data)
-      if TimeToDTStamp(event_data['when:to']) > now:
-        event.who.remove(user_cal.owner.user_id())
-        if not event.who:
-          gcal.delete(event.gcal_edit, force=True)
-          event.delete()
-        else:
-          event.put()
-    user_cal.upcoming = upcoming
-    user_cal.put()
+        yield (uid, RemoveTimezone(component.get('dtend').dt) > now, False)
