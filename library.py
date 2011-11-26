@@ -299,10 +299,8 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
   logging.info('%s called with: %s' % ('UpdateUserSubscriptions', locals()))
 
   if defer_now:
-    # TODO(dhermes) Can I use named arguments?
-    defer(UpdateUserSubscriptions,
-          links, user_cal, gcal,
-          upcoming, False, start)
+    defer(UpdateUserSubscriptions, links, user_cal, gcal,
+          upcoming=upcoming, defer_now=False, start=start)
     return
 
   # Set variables to pick up where the loop left off in case of DLExcError
@@ -329,10 +327,9 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
     # upcoming is also updated along the way
     links = links[index:]
     start = {'uid': uid, 'link': links[0]}
-    # TODO(dhermes) Can I use named arguments?
-    defer(UpdateUserSubscriptions,
-          links, user_cal, gcal,
-          upcoming, defer_now, start)
+    defer(UpdateUserSubscriptions, links, user_cal, gcal,
+          upcoming=upcoming, defer_now=defer_now, start=start)
+    return
   
   # If the loop completes without timing out
   defer(UpdateUpcoming, user_cal, upcoming, gcal)
