@@ -275,6 +275,8 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
   will iterate through the difference and delete those events that have not yet
   passed which are still on the calendar.
   """
+  logging.info('%s called with: %s' % ('UpdateUpcoming', locals()))
+
   if set(user_cal.upcoming) != set(upcoming):
     now = datetime.datetime.utcnow()
     for uid in set(user_cal.upcoming).difference(upcoming):
@@ -294,6 +296,8 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
 
 def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
                             defer_now=False, start={}):
+  logging.info('%s called with: %s' % ('UpdateUserSubscriptions', locals()))
+
   if defer_now:
     # TODO(dhermes) Can I use named arguments?
     defer(UpdateUserSubscriptions,
@@ -342,6 +346,8 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
   Returns a generator instance which yields (uid, bool) tuples where bool
   is true if the event at uid is upcoming
   """
+  logging.info('%s called with: %s' % ('UpdateSubscription', locals()))
+
   current_user_id = current_user.user_id()
 
   valid, link = WhiteList(link)
