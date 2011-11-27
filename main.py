@@ -28,14 +28,14 @@ import simplejson
 
 # App engine specific libraries
 from google.appengine.api import users
-from google.appengine.ext import db
-from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
+from google.appengine.ext.webapp import WSGIApplication
 from google.appengine.ext.webapp.util import login_required
 from google.appengine.ext.webapp.util import run_wsgi_app
 
 # App specific libraries
 from library import ConvertToInterval
+from library import ExtendedHandler
 from library import InitGCAL
 from library import UpdateString
 from library import UpdateUserSubscriptions
@@ -54,7 +54,7 @@ FREQUENCIES = {'three-hrs': [val for val in range(56)],
                'week': [56*val for val in range(56/56)]}
 
 
-class MainHandler(webapp.RequestHandler):
+class MainHandler(ExtendedHandler):
   """Handles get requests to /; provides a UI for managing subscribed feeds"""
 
   @login_required
@@ -90,7 +90,7 @@ class MainHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, template_vals))
 
 
-class AddSubscription(webapp.RequestHandler):
+class AddSubscription(ExtendedHandler):
   """Handles post requests to /add and will change add a user calendar feed"""
 
   def post(self):
@@ -156,7 +156,7 @@ class AddSubscription(webapp.RequestHandler):
     self.response.out.write(simplejson.dumps(user_cal.calendars))
 
 
-class ChangeFrequency(webapp.RequestHandler):
+class ChangeFrequency(ExtendedHandler):
   """Handles post requests to /freq and will change frequency for a user"""
 
   def post(self):
@@ -203,7 +203,7 @@ class ChangeFrequency(webapp.RequestHandler):
       return
 
 
-class OwnershipVerifyHandler(webapp.RequestHandler):
+class OwnershipVerifyHandler(ExtendedHandler):
   """Handles / as well as redirects for login required"""
 
   def get(self):
@@ -213,7 +213,7 @@ class OwnershipVerifyHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, {}))
 
 
-class AboutHandler(webapp.RequestHandler):
+class AboutHandler(ExtendedHandler):
   """Serves the static about page"""
 
   def get(self):
@@ -222,7 +222,7 @@ class AboutHandler(webapp.RequestHandler):
     self.response.out.write(template.render(path, {}))
 
 
-class Throw404(webapp.RequestHandler):
+class Throw404(ExtendedHandler):
   """Catches all non-specified (404) requests"""
 
   def get(self):
@@ -232,14 +232,14 @@ class Throw404(webapp.RequestHandler):
     self.response.out.write(template.render(path, {}))
 
 
-application = webapp.WSGIApplication([
-  ('/', MainHandler),
-  ('/add', AddSubscription),
-  ('/freq', ChangeFrequency),
-  ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
-  ('/about.html', AboutHandler),
-  ('/.*', Throw404),
-  ], debug=True)
+application = WSGIApplication([
+    ('/', MainHandler),
+    ('/add', AddSubscription),
+    ('/freq', ChangeFrequency),
+    ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
+    ('/about.html', AboutHandler),
+    ('/.*', Throw404),
+    ], debug=True)
 
 
 # TODO(dhermes): read

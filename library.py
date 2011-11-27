@@ -24,9 +24,13 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 # General libraries
 import datetime
 import logging
+import os
 import re
 import simplejson
+import sys
 from time import sleep
+import traceback
+from types import FunctionType as function
 from urllib2 import urlopen
 
 # Third-party libraries
@@ -38,11 +42,15 @@ from gdata.client import RedirectError
 from icalendar import Calendar
 
 # App engine specific libraries
+from google.appengine.api import mail
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
+from google.appengine.ext.webapp import RequestHandler
+from google.appengine.ext.webapp import template
 from google.appengine.runtime import DeadlineExceededError
 
 # App specific libraries
+from admins import ADMINS_TO
 from models import Event
 from secret_key import CONSUMER_KEY
 from secret_key import CONSUMER_SECRET
@@ -63,6 +71,7 @@ RESPONSES = {1: ['once a week', 'week'],
 def JsonAscii(obj):
   """Returns an object in JSON with ensure_ascii explicitly set True"""
   return simplejson.dumps(obj, ensure_ascii=True)
+
 
 def UpdateString(update_intervals):
   """Returns a JSON object to represent the frequency of updates"""
@@ -134,7 +143,7 @@ def TimeToDTStamp(time_as_str):
     return converted_val
   except ValueError:
     pass
-    
+
   time_parse += 'T%H:%M:%S.000Z'
   try:
     converted_val = datetime.datetime.strptime(time_as_str, time_parse)
@@ -164,7 +173,7 @@ def WhiteList(link):
   # If we WhiteList is updated, ParseEvent must be as well
   valid = False
   transformed = link
-  
+
   pattern_webcal = ('^webcal://www.tripit.com/feed/ical/private/'
                     '[A-Za-z0-9-]+/tripit.ics$')
   pattern_http = ('^http://www.tripit.com/feed/ical/private/'
@@ -292,7 +301,6 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     user_cal.upcoming = list(set(upcoming))
     user_cal.put()
 
-#######################################
 
 def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
                             defer_now=False, start={}):
@@ -330,7 +338,7 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
           upcoming=upcoming, defer_now=defer_now, start=start)
     return
-  
+
   # If the loop completes without timing out
   defer(UpdateUpcoming, user_cal, upcoming, gcal)
   return
@@ -455,3 +463,74 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
         # execution has successfully completed
         # TODO(dhermes) catch error on get call below
         yield (uid, RemoveTimezone(component.get('dtend').dt) > now, False)
+
+################################################
+############# Handler class helper #############
+################################################
+
+def email_admins(traceback_info, defer_now=False):
+  if defer_now:
+    defer(email_admins, traceback_info, defer_now=False)
+    return
+
+  sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
+  subject = 'Persistent Cal Error: Admin Notify'
+  email_path = os.path.join(os.path.dirname(__file__),
+                            'templates', 'error_notify.templ')
+  body = template.render(email_path, {'error': traceback_info})
+  mail.send_mail(sender=sender, to=ADMINS_TO,
+                 subject=subject, body=body)
+
+
+def deadline_decorator(method):
+
+  def wrapped_method(self, *args, **kwargs):
+    try:
+      method(self, *args, **kwargs)
+    except DeadlineExceededError:
+      traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
+      email_admins(traceback_info, defer_now=True)
+
+      path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
+      self.response.clear()
+      self.response.set_status(500)
+      self.response.out.write(template.render(path, {}))
+
+  return wrapped_method
+
+
+class DecorateHttpVerbsMetaclass(type):
+  """Metaclass to decorate all HTTP verbs with a special method"""
+
+  def __new__(cls, name, parents, cls_attr):
+    """
+    Constructs the object
+
+    This is explicitly intended for Google App Engine's RequestHandler.
+    Requests only suport 7 of the 9 HTTP verbs, 4 of which we will
+    decorate: get, post, put and delete. The other three supported
+    (head, options, trace) may be added at a later time.
+
+    Reference: ('http://code.google.com/appengine/docs/python/tools/'
+                'webapp/requesthandlerclass.html')
+    """
+    verbs = ['get', 'post', 'put', 'delete']
+    for verb in verbs:
+      if verb in cls_attr and isinstance(cls_attr[verb], function):
+        cls_attr[verb] = deadline_decorator(cls_attr[verb])
+
+    return super(DecorateHttpVerbsMetaclass, cls).__new__(cls, name,
+                                                          parents, cls_attr)
+
+
+class ExtendedHandler(RequestHandler):
+  __metaclass__ = DecorateHttpVerbsMetaclass
+
+  def handle_exception(self, exception, debug_mode):
+    traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
+    email_admins(traceback_info, defer_now=True)
+
+    path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
+    self.response.clear()
+    self.response.set_status(500)
+    self.response.out.write(template.render(path, {}))

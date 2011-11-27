@@ -2,6 +2,7 @@
 *~
 #*
 *.pyc
+_admins.py
 _model_update.py
 _secret_key.py
 guarded_tokens.py

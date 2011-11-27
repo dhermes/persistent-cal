@@ -39,7 +39,7 @@ from secret_key import TOKEN_SECRET
 def main():
   """
   Processes main calendar event feed and writes some event data to a file
-  
+
   get_calendar_event_feed uses a default desired_class of
   `gdata.calendar.data.CalendarEventFeed`
   hence the get_feed request uses this class to convert the response
