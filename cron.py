@@ -25,28 +25,35 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 from datetime import datetime
 
 # App engine specific libraries
-from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
+from google.appengine.ext.webapp import WSGIApplication
 
 # App specific libraries
 from library import ConvertToInterval
+from library import ExtendedHandler
 from library import InitGCAL
 from library import UpdateUserSubscriptions
 from models import UserCal
 
 
-class MainHandler(webapp.RequestHandler):
+class MainHandler(ExtendedHandler):
 
   def get(self):
     """Updates every three hours."""
-    # TODO(dhermes) Check header for X-AppEngine-Cron: true
+    # ('http://code.google.com/appengine/docs/python/tools/webapp/'
+    #  'requestclass.html#Request_headers')
+    # http://docs.webob.org/en/latest/reference.html#headers
+    # "Keys are case-insensitive."
+    if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
+      # Check header for X-AppEngine-Cron: true
+      # Don't run if not
+      return
+    
     now = ConvertToInterval(datetime.utcnow())
     GCAL = None
 
     # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
     #               that all_users becomes to big to set off background tasks
-    # from google.appengine.runtime import DeadlineExceededError
-    # from google.appengine.ext import deferred
     all_users = UserCal.all()
     for user_cal in all_users:
       if now in user_cal.update_intervals:
@@ -56,9 +63,9 @@ class MainHandler(webapp.RequestHandler):
                                 GCAL, defer_now=True)
 
 
-application = webapp.WSGIApplication([
-  ('/cron', MainHandler),
-  ], debug=True)
+application = WSGIApplication([
+    ('/cron', MainHandler),
+    ], debug=True)
 
 
 if __name__ == '__main__':

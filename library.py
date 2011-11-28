@@ -214,6 +214,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
       while attempts:
         try:
           gcal.Update(event)
+          logging.info('%s updated' % event.get_edit_link().href)
           break
         except RedirectError:
           attempts -= 1
@@ -232,6 +233,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
     while attempts:
       try:
         new_event = gcal.InsertEvent(event, insert_uri=URI)
+        logging.info('%s was inserted' % new_event.get_edit_link().href)
         break
       except RedirectError:
         attempts -= 1
@@ -295,8 +297,17 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
         event.who.remove(user_cal.owner.user_id())
         if not event.who:
           gcal.delete(event.gcal_edit, force=True)
+          logging.info('%s deleted' % event.gcal_edit)
           event.delete()
         else:
+          # TODO(dhermes) To avoid two trips to the server, reconstruct
+          #               the CalendarEventEntry from the data in event
+          #               rather than using GET
+          cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+          # Filter out this user
+          cal_event.who = [who_entry for who_entry in cal_event.who
+                           if who_entry.email != event_data['email']]
+          gcal.Update(cal_event)
           event.put()
     user_cal.upcoming = list(set(upcoming))
     user_cal.put()
@@ -329,7 +340,9 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
         if is_upcoming:
           upcoming.append(uid)
         elif failed:
-          logging.info('failed %s from %s' % (uid, link))
+          logging.info('silently failed operation on %s from %s' % (uid, link))
+          email_admins('silently failed operation on %s from %s' % (uid, link),
+                       defer_now=True)
   except DeadlineExceededError:
     # update links to account for progress
     # upcoming is also updated along the way
@@ -409,6 +422,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           while attempts:
             try:
               cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+              logging.info('GET sent to %s' % event.gcal_edit)
               break
             except RedirectError:
               attempts -= 1
@@ -445,6 +459,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           while attempts:
             try:
               gcal.Update(cal_event)
+              logging.info('%s updated' % cal_event.get_edit_link().href)
 
               # After all possible changes to the Event instance have occurred
               event.put()
