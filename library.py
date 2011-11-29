@@ -387,8 +387,10 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
   for component in ical.walk()[start_index:]:
     if component.name != 'VEVENT':
-      logging.info('iCal at %s has unexpected event type %s' % (
-        link, component.name))
+      msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
+      logging.info(msg)
+      if component.name != 'VCALENDAR':
+        email_admins(msg, defer_now=True)
     else:
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)

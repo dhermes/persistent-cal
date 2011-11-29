@@ -23,11 +23,15 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 from google.appengine.ext import db
 
+
 class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)"""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as simplejson
   gcal_edit = db.StringProperty(required=True)
+
+  def __repr__(self):
+    return 'Event(name=%s)' % self.key().name()
 
 
 class UserCal(db.Model):
@@ -40,3 +44,6 @@ class UserCal(db.Model):
   # int defaults to long, so I'll use long
   update_intervals = db.ListProperty(long, required=True)
   upcoming = db.ListProperty(str, required=True)
+
+  def __repr__(self):
+    return 'UserCal(owner=%s,name=%s)' % (self.owner.email(), self.key().name())

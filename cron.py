@@ -48,7 +48,7 @@ class MainHandler(ExtendedHandler):
       # Check header for X-AppEngine-Cron: true
       # Don't run if not
       return
-    
+
     now = ConvertToInterval(datetime.utcnow())
     GCAL = None
 
