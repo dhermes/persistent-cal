@@ -23,11 +23,14 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 from datetime import datetime
+import logging
 import os
 import simplejson
 
 # App engine specific libraries
 from google.appengine.api import users
+from google.appengine.ext.deferred import PermanentTaskFailure
+from google.appengine.ext.deferred import run
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
 from google.appengine.ext.webapp.util import run_wsgi_app
@@ -35,6 +38,7 @@ from google.appengine.ext.webapp import WSGIApplication
 
 # App specific libraries
 from library import ConvertToInterval
+from library import email_admins
 from library import ExtendedHandler
 from library import InitGCAL
 from library import UpdateString
@@ -203,6 +207,39 @@ class ChangeFrequency(ExtendedHandler):
       return
 
 
+class DeferredHandler(ExtendedHandler):
+  """A {borrowed} webapp handler class that processes deferred invocations."""
+
+  def post(self):
+    """Handles task queue POST requests to /workers"""
+    if 'X-AppEngine-TaskName' not in self.request.headers:
+      logging.critical('Detected an attempted XSRF attack. The header '
+                       '"X-AppEngine-Taskname" was not set.')
+      self.response.set_status(403)
+      return
+
+    in_prod = (
+        not self.request.environ.get('SERVER_SOFTWARE').startswith('Devel'))
+    if in_prod and self.request.environ.get('REMOTE_ADDR') != '0.1.0.2':
+      logging.critical('Detected an attempted XSRF attack. This request did '
+                       'not originate from Task Queue.')
+      self.response.set_status(403)
+      return
+
+    headers = ['%s:%s' % (k, v) for k, v in self.request.headers.items()
+               if k.lower().startswith('x-appengine-')]
+    logging.info(', '.join(headers))
+
+    try:
+      run(self.request.body)
+    except PermanentTaskFailure, e:
+      # In this case, the function can't be run, so we alert but do not
+      # raise the error, returning a 200 status code, hence killing the task.
+      msg = 'Permanent failure attempting to execute task'
+      logging.exception(msg)
+      email_admins(msg, defer_now=True)
+
+
 class OwnershipVerifyHandler(ExtendedHandler):
   """Handles / as well as redirects for login required"""
 
@@ -234,6 +271,7 @@ class Throw404(ExtendedHandler):
 
 application = WSGIApplication([
     ('/', MainHandler),
+    ('/workers', DeferredHandler),
     ('/add', AddSubscription),
     ('/freq', ChangeFrequency),
     ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),

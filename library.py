@@ -319,7 +319,7 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
 
   if defer_now:
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
-          upcoming=upcoming, defer_now=False, start=start)
+          upcoming=upcoming, defer_now=False, start=start, _url='/workers')
     return
 
   # Set variables to pick up where the loop left off in case of DLExcError
@@ -349,11 +349,11 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
     links = links[index:]
     start = {'uid': uid, 'link': links[0]}
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
-          upcoming=upcoming, defer_now=defer_now, start=start)
+          upcoming=upcoming, defer_now=defer_now, start=start, _url='/workers')
     return
 
   # If the loop completes without timing out
-  defer(UpdateUpcoming, user_cal, upcoming, gcal)
+  defer(UpdateUpcoming, user_cal, upcoming, gcal, _url='/workers')
   return
 
 
@@ -487,7 +487,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
 def email_admins(traceback_info, defer_now=False):
   if defer_now:
-    defer(email_admins, traceback_info, defer_now=False)
+    defer(email_admins, traceback_info, defer_now=False, _url='/workers')
     return
 
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'

@@ -1,5 +1,5 @@
 application: persistent-cal
-version: 0-4
+version: 0-5
 runtime: python
 api_version: 1 # only existing version
 
@@ -17,6 +17,10 @@ handlers:
 
 - url: /cron
   script: cron.py
+  login: admin
+
+- url: /workers
+  script: main.py
   login: admin
 
 - url: /.*
