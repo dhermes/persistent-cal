@@ -7,6 +7,6 @@ _model_update.py
 _secret_key.py
 guarded_tokens.py
 test.py
-time_zones.py
+remote_api.py
 verify.html
 curr_state_cal.json

@@ -280,7 +280,11 @@ application = WSGIApplication([
     ], debug=True)
 
 
+def main():
+  run_wsgi_app(application)
+
+
 # TODO(dhermes): read
 # http://code.google.com/appengine/docs/python/runtime.html#App_Caching
 if __name__ == '__main__':
-  run_wsgi_app(application)
+  main()
