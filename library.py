@@ -45,6 +45,8 @@ from icalendar import Calendar
 from google.appengine.api import mail
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
+from google.appengine.ext.deferred import PermanentTaskFailure
+from google.appengine.ext.deferred import run
 from google.appengine.ext.webapp import RequestHandler
 from google.appengine.ext.webapp import template
 from google.appengine.runtime import DeadlineExceededError
@@ -504,8 +506,15 @@ def deadline_decorator(method):
   def wrapped_method(self, *args, **kwargs):
     try:
       method(self, *args, **kwargs)
+    except PermanentTaskFailure:
+      # In this case, the function can't be run, so we alert but do not
+      # raise the error, returning a 200 status code, hence killing the task.
+      msg = 'Permanent failure attempting to execute task'
+      logging.exception(msg)
+      email_admins(msg, defer_now=True)
     except DeadlineExceededError:
       traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
+      logging.exception(traceback_info)
       email_admins(traceback_info, defer_now=True)
 
       path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
@@ -545,9 +554,37 @@ class ExtendedHandler(RequestHandler):
 
   def handle_exception(self, exception, debug_mode):
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
+    logging.exception(traceback_info)
     email_admins(traceback_info, defer_now=True)
 
     path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
     self.response.clear()
     self.response.set_status(500)
     self.response.out.write(template.render(path, {}))
+
+
+# TODO(dhermes) make proposed change to AppEngine by calling super().post
+class TaskHandler(RequestHandler):
+  """A {borrowed} webapp handler class that processes deferred invocations."""
+
+  def post(self):
+    """Handles task queue POST requests"""
+    if 'X-AppEngine-TaskName' not in self.request.headers:
+      logging.critical('Detected an attempted XSRF attack. The header '
+                       '"X-AppEngine-Taskname" was not set.')
+      self.response.set_status(403)
+      return
+
+    in_prod = (
+        not self.request.environ.get('SERVER_SOFTWARE').startswith('Devel'))
+    if in_prod and self.request.environ.get('REMOTE_ADDR') != '0.1.0.2':
+      logging.critical('Detected an attempted XSRF attack. This request did '
+                       'not originate from Task Queue.')
+      self.response.set_status(403)
+      return
+
+    headers = ['%s:%s' % (k, v) for k, v in self.request.headers.items()
+               if k.lower().startswith('x-appengine-')]
+    logging.info(', '.join(headers))
+
+    run(self.request.body)
