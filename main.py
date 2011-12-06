@@ -23,6 +23,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 from datetime import datetime
+import logging
 import os
 import simplejson
 
@@ -120,12 +121,14 @@ class AddSubscription(ExtendedHandler):
     valid, _ = WhiteList(link)
     if not valid:
       self.response.out.write(simplejson.dumps('whitelist:fail'))
+      logging.info('whitelist:fail')
       return
 
     # TODO(dhermes): Make sure self.request.referrer is safe
     current_user = users.get_current_user()
     if current_user is None:
       self.response.out.write(simplejson.dumps('no_user:fail'))
+      logging.info('no_user:fail')
       return
 
     user_cal = UserCal.get_by_key_name(current_user.user_id())
@@ -137,15 +140,19 @@ class AddSubscription(ExtendedHandler):
       user_cal.calendars.append(link)
     else:
       if len(user_cal.calendars) >= 4:
-        self.response.out.write(simplejson.dumps('limit:fail'))
-      elif link in user_cal.calendars:
-        self.response.out.write(simplejson.dumps('contained:fail'))
+        msg = 'limit:fail'
+      else:
+        # link must be in user_cal.calendars already
+        msg = 'contained:fail'
+      self.response.out.write(simplejson.dumps(msg))
+      logging.info(msg)
       return
 
     user_cal.put()
 
     global GCAL
     if GCAL is None:
+      logging.info('GCAL initialized up')
       GCAL = InitGCAL()
 
     # TODO(dhermes) since user_cal has already been updated/added, be sure
@@ -180,6 +187,7 @@ class ChangeFrequency(ExtendedHandler):
     current_user = users.get_current_user()
     if current_user is None:
       self.response.out.write(simplejson.dumps('no_user:fail'))
+      logging.info('no_user:fail')
       return
 
     frequency = self.request.get('frequency', None)
@@ -198,9 +206,11 @@ class ChangeFrequency(ExtendedHandler):
       self.response.out.write(UpdateString(update_intervals))
     else:
       if user_cal is None:
-        self.response.out.write(simplejson.dumps('no_cal:fail'))
+        msg = 'no_cal:fail'
       else:
-        self.response.out.write(simplejson.dumps('wrong_freq:fail'))
+        msg = 'wrong_freq:fail'
+      self.response.out.write(simplejson.dumps(msg))
+      logging.info(msg)
       return
 
 
