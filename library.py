@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Extended function library for request handlers for persistent-cal"""
+"""Extended function library for request handlers for persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
@@ -35,10 +35,10 @@ from urllib2 import urlopen
 
 # Third-party libraries
 import atom
-import gdata.gauth
 import gdata.calendar.client
 import gdata.calendar.data
 from gdata.client import RedirectError
+import gdata.gauth
 from icalendar import Calendar
 
 # App engine specific libraries
@@ -73,12 +73,12 @@ PATH_TO_500_TEMPLATE = path = os.path.join(os.path.dirname(__file__),
 
 
 def JsonAscii(obj):
-  """Returns an object in JSON with ensure_ascii explicitly set True"""
+  """Returns an object in JSON with ensure_ascii explicitly set True."""
   return simplejson.dumps(obj, ensure_ascii=True)
 
 
 def UpdateString(update_intervals):
-  """Returns a JSON object to represent the frequency of updates"""
+  """Returns a JSON object to represent the frequency of updates."""
   length = len(update_intervals)
   if length not in RESPONSES:
     raise Exception('Bad interval length')
@@ -87,7 +87,7 @@ def UpdateString(update_intervals):
 
 
 def InitGCAL():
-  """Initializes a calendar client based on a stored auth token"""
+  """Initializes a calendar client based on a stored auth token."""
   gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
 
   auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
@@ -101,7 +101,7 @@ def InitGCAL():
 
 
 def ConvertToInterval(timestamp):
-  """Converts a datetime timestamp to a time interval for a cron job"""
+  """Converts a datetime timestamp to a time interval for a cron job."""
   # Monday 0, sunday 6
   # 8 intervals in a day, round up hours
   interval = 8*timestamp.weekday() + timestamp.hour/3 + 1
@@ -120,7 +120,7 @@ def ConvertToInterval(timestamp):
 
 
 def FormatTime(time_value):
-  """Takes a datetime object and returns a formatted time stamp"""
+  """Takes a datetime object and returns a formatted time stamp."""
   # Fails if not datetime.datetime or datetime.datetime
 
   # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
@@ -136,7 +136,7 @@ def FormatTime(time_value):
 
 
 def TimeToDTStamp(time_as_str):
-  """Takes time as string and returns a datetime object"""
+  """Takes time as string and returns a datetime object."""
   # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
   # strftime('%Y-%m-%d') for date
 
@@ -157,11 +157,11 @@ def TimeToDTStamp(time_as_str):
 
 
 def RemoveTimezone(time_value):
-  """Takes a datetime object and removes the timezone"""
+  """Takes a datetime object and removes the timezone."""
   if isinstance(time_value, datetime.datetime):
     if time_value.tzinfo is not None:
       time_parse = '%Y-%m-%dT%H:%M:%S.000Z'
-      time_value = time_value.strftime(time_parse) # TZ is lost
+      time_value = time_value.strftime(time_parse)  # TZ is lost
       time_value = datetime.datetime.strptime(time_value, time_parse)
   elif isinstance(time_value, datetime.date):
     # convert to datetime.datetime object for comparison
@@ -173,7 +173,7 @@ def RemoveTimezone(time_value):
 
 
 def WhiteList(link):
-  """Determines if a link is on the whitelist and transforms it if needed"""
+  """Determines if a link is on the whitelist and transforms it if needed."""
   # If we WhiteList is updated, ParseEvent must be as well
   valid = False
   transformed = link
@@ -195,7 +195,7 @@ def WhiteList(link):
 
 
 def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
-  """Create event in main application calendar and add user as attendee"""
+  """Create event in main application calendar and add user as attendee."""
   update = (event is not None)
   if not update:
     event = gdata.calendar.data.CalendarEventEntry()
@@ -218,12 +218,11 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
       while attempts:
         try:
           gcal.Update(event)
-          logging.info('%s updated' % event.get_edit_link().href)
+          logging.info('%s updated', event.get_edit_link().href)
           break
         except RedirectError:
           attempts -= 1
           sleep(3)
-          pass
 
     # Returns none if event did not get updated (if it needed to)
     return event if attempts else None
@@ -237,18 +236,17 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
     while attempts:
       try:
         new_event = gcal.InsertEvent(event, insert_uri=URI)
-        logging.info('%s was inserted' % new_event.get_edit_link().href)
+        logging.info('%s was inserted', new_event.get_edit_link().href)
         break
       except RedirectError:
         attempts -= 1
         sleep(3)
-        pass
 
     return new_event
 
 
 def ParseEvent(event):
-  """Parses an iCalendar.cal.Event instance to a predefined format"""
+  """Parses an iCalendar.cal.Event instance to a predefined format."""
   # Assumes event is type icalendar.cal.Event
 
   # all events have a UID, and almost all begin with 'item-';
@@ -260,12 +258,6 @@ def ParseEvent(event):
   if location == 'No destination specified':
     location = 'an unspecified location'
 
-  # # WITNESS:
-  # 4754cd75888cac4a53c7cf003980e195b46dc9fd@tripit.com
-  # via 3F43994D-4591D1AA4C63B1472D8D5D0E9568E5A8/tripit.ics
-  # description: Daniel Hermes is in San Diego, CA from Sep 1...
-  # and via 4A025929-DCB74CB87F330487615696811896215A/tripit.ics
-  # description: Sharona Franko is in San Diego, CA from Sep 1...
   if not uid.startswith('item-'):
     target = ' is in %s ' % location
     if description.count(target) != 1:
@@ -283,12 +275,15 @@ def ParseEvent(event):
 
 
 def UpdateUpcoming(user_cal, upcoming, gcal):
-  """
-  Updates the GCal instance by deleting pending events removed from ext calendar
+  """Updates the GCal inst. by deleting events removed from extern. calendar.
 
   If the new upcoming events list is different from that on the user_cal, it
   will iterate through the difference and delete those events that have not yet
   passed which are still on the calendar.
+  Args:
+    user_cal:
+    upcoming:
+    gcal:
   """
   logging.info('%s called with: %s' % ('UpdateUpcoming', locals()))
 
@@ -301,7 +296,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
         event.who.remove(user_cal.owner.user_id())
         if not event.who:
           gcal.delete(event.gcal_edit, force=True)
-          logging.info('%s deleted' % event.gcal_edit)
+          logging.info('%s deleted', event.gcal_edit)
           event.delete()
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
@@ -317,9 +312,12 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     user_cal.put()
 
 
-def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
-                            defer_now=False, start={}):
-  logging.info('%s called with: %s' % ('UpdateUserSubscriptions', locals()))
+def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None,
+                            defer_now=False, start=None):
+  """Updates a list of calendars for a user, with a call to self on timeout."""
+  logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
+  upcoming = [] if upcoming is None else upcoming
+  start = {} if start is None else start
 
   if defer_now:
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
@@ -344,7 +342,7 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
         if is_upcoming:
           upcoming.append(uid)
         elif failed:
-          logging.info('silently failed operation on %s from %s' % (uid, link))
+          logging.info('silently failed operation on %s from %s', uid, link)
           email_admins('silently failed operation on %s from %s' % (uid, link),
                        defer_now=True)
   except DeadlineExceededError:
@@ -362,13 +360,17 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=[],
 
 
 def UpdateSubscription(link, current_user, gcal, start_uid=None):
-  """
-  Updates the GCal instance with the events in link for the current_user
+  """Updates the GCal instance with the events in link for the current_user.
 
   Returns a generator instance which yields (uid, bool) tuples where bool
   is true if the event at uid is upcoming
+  Args:
+    link:
+    current_user:
+    gcal:
+    start_uid:
   """
-  logging.info('%s called with: %s' % ('UpdateSubscription', locals()))
+  logging.info('%s called with: %s', 'UpdateSubscription', locals())
 
   current_user_id = current_user.user_id()
 
@@ -428,12 +430,11 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           while attempts:
             try:
               cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
-              logging.info('GET sent to %s' % event.gcal_edit)
+              logging.info('GET sent to %s', event.gcal_edit)
               break
             except RedirectError:
               attempts -= 1
               sleep(3)
-              pass
 
           # TODO(dhermes) add to failed queue to be updated by a cron
           if cal_event is None:
@@ -461,11 +462,10 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
           # Push all updates to calendar event
           attempts = 3
-          new_event = None
           while attempts:
             try:
               gcal.Update(cal_event)
-              logging.info('%s updated' % cal_event.get_edit_link().href)
+              logging.info('%s updated', cal_event.get_edit_link().href)
 
               # After all possible changes to the Event instance have occurred
               event.put()
@@ -473,7 +473,6 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
             except RedirectError:
               attempts -= 1
               sleep(3)
-              pass
 
           # If attempts is 0, we have failed and don't want to add the
           # uid to results
@@ -490,6 +489,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 ################################################
 
 def email_admins(traceback_info, defer_now=False):
+  """Sends email to admins with the preferred message, with option to defer."""
   if defer_now:
     defer(email_admins, traceback_info, defer_now=False, _url='/workers')
     return
@@ -504,6 +504,7 @@ def email_admins(traceback_info, defer_now=False):
 
 
 def deadline_decorator(method):
+  """Decorator for HTTP verbs to handle GAE timeout."""
 
   def wrapped_method(self, *args, **kwargs):
     try:
@@ -527,16 +528,20 @@ def deadline_decorator(method):
 
 
 class DecorateHttpVerbsMetaclass(type):
-  """Metaclass to decorate all HTTP verbs with a special method"""
+  """Metaclass to decorate all HTTP verbs with a special method."""
 
   def __new__(cls, name, parents, cls_attr):
-    """
-    Constructs the object
+    """Constructs the object.
 
     This is explicitly intended for Google App Engine's RequestHandler.
     Requests only suport 7 of the 9 HTTP verbs, 4 of which we will
     decorate: get, post, put and delete. The other three supported
     (head, options, trace) may be added at a later time.
+    Args:
+      cls:
+      name:
+      parents:
+      cls_attr:
 
     Reference: ('http://code.google.com/appengine/docs/python/tools/'
                 'webapp/requesthandlerclass.html')

@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Debugging tool to get current state of main calendar"""
+"""Debugging tool to get current state of main calendar."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
@@ -25,8 +25,8 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 import simplejson
 
 # Third-party libraries
-import gdata.gauth
 import gdata.calendar.client
+import gdata.gauth
 
 # App specific libraries
 # from library import InitGCAL
@@ -34,6 +34,10 @@ from secret_key import CONSUMER_KEY
 from secret_key import CONSUMER_SECRET
 from secret_key import TOKEN
 from secret_key import TOKEN_SECRET
+
+
+URI = ('https://www.google.com/calendar/feeds/'
+       'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
 
 
 def main():
@@ -57,6 +61,8 @@ def main():
   write the start and end times from the when field as well as all the email
   addresses of the attendees from the who field to a dictionary. This dictionary
   is then written to a file as serialized JSON.
+
+  raises Exception if an edit link is encountered more than once
   """
   # TODO(dhermes) fix the import issue for the authorized client
   # InitGCAL won't import since library.py has app engine imports
@@ -69,11 +75,8 @@ def main():
                                           auth_state=3)
   GCAL.auth_token = auth_token
 
-
-  URI = ('https://www.google.com/calendar/feeds/'
-         'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
   feed = GCAL.get_calendar_event_feed(uri=URI)
-  total_results = int(feed.total_results.text) # TODO(dhermes) catch error here
+  total_results = int(feed.total_results.text)  # TODO(dhermes) catch error here
   if total_results > 25:
     URI = '%s?max-results=%s' % (URI, total_results)
     feed = GCAL.get_calendar_event_feed(uri=URI)
@@ -81,20 +84,19 @@ def main():
   result = {}
   for event in feed.entry:
     # each event is [CalendarEventEntry]
-    when = event.when # when is [When]
-    curr_starts = [t.start for t in when] # [string]
-    curr_ends = [t.end for t in when] # [string]
+    when = event.when  # when is [When]
+    curr_starts = [t.start for t in when]  # [string]
+    curr_ends = [t.end for t in when]  # [string]
     # who is [gdata.data.Who]
     who = [v.email for v in event.who]
     # each v.email is string
-    gcal_edit = event.get_edit_link().href # string
+    gcal_edit = event.get_edit_link().href  # string
     if gcal_edit in result:
       raise Exception('Hmmmmmmm, duplicate')
     else:
       result[gcal_edit] = {'starts': curr_starts,
                            'ends': curr_ends,
                            'who': who}
-
 
   with open('curr_state_cal.json', 'wb') as fh:
     simplejson.dump(result, fh)

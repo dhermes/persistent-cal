@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Handler classes for all requests to persistent-cal"""
+"""Handler classes for all requests to persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
@@ -57,12 +57,11 @@ FREQUENCIES = {'three-hrs': [val for val in range(56)],
 
 
 class MainHandler(ExtendedHandler):
-  """Handles get requests to /; provides a UI for managing subscribed feeds"""
+  """Handles get requests to /; provides a UI for managing subscribed feeds."""
 
   @login_required
   def get(self):
-    """
-    Main UI for persistent-cal
+    """Main UI for persistent-cal.
 
     If a user is not logged in, login_required will force them to log in before
     reaching this page. Once they arrive, if they do not have a user calendar
@@ -93,11 +92,10 @@ class MainHandler(ExtendedHandler):
 
 
 class AddSubscription(ExtendedHandler):
-  """Handles post requests to /add and will change add a user calendar feed"""
+  """Handles post requests to /add and will change add a user calendar feed."""
 
   def post(self):
-    """
-    Handles post requests to /add
+    """Handles post requests to /add.
 
     First validates the calendar-link from the post request against a whitelist
     of accepted calendar feed links and then validates the user. If either of
@@ -165,11 +163,10 @@ class AddSubscription(ExtendedHandler):
 
 
 class ChangeFrequency(ExtendedHandler):
-  """Handles post requests to /freq and will change frequency for a user"""
+  """Handles post requests to /freq and will change frequency for a user."""
 
   def post(self):
-    """
-    Handles post requests to /freq
+    """Handles post requests to /freq.
 
     Validates the user, the user calendar, and the frequency value from the
     post request. If any of those three are not valid, nothing in the datastore
@@ -219,29 +216,29 @@ class DeferredHandler(ExtendedHandler, TaskHandler):
 
 
 class OwnershipVerifyHandler(ExtendedHandler):
-  """Handles / as well as redirects for login required"""
+  """Handles / as well as redirects for login required."""
 
   def get(self):
-    """Serves a static HTML file with verification data"""
+    """Serves a static HTML file with verification data."""
     path = os.path.join(os.path.dirname(__file__),
                         'googlef7560eebc24762bb.html')
     self.response.out.write(template.render(path, {}))
 
 
 class AboutHandler(ExtendedHandler):
-  """Serves the static about page"""
+  """Serves the static about page."""
 
   def get(self):
-    """Serves a static HTML file with an about page"""
+    """Serves a static HTML file with an about page."""
     path = os.path.join(os.path.dirname(__file__), 'templates', 'about.html')
     self.response.out.write(template.render(path, {}))
 
 
 class Throw404(ExtendedHandler):
-  """Catches all non-specified (404) requests"""
+  """Catches all non-specified (404) requests."""
 
   def get(self):
-    """Serves a static HTML file with a 404 page"""
+    """Serves a static HTML file with a 404 page."""
     self.error(404)
     path = os.path.join(os.path.dirname(__file__), 'templates', '404.html')
     self.response.out.write(template.render(path, {}))

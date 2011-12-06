@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Handler for cron update requests made from persistent-cal"""
+"""Handler for cron update requests made from persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'

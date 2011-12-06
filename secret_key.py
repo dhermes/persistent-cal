@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Application specific tokens for persistent-cal"""
+"""Application specific tokens for persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
