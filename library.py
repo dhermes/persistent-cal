@@ -68,6 +68,8 @@ RESPONSES = {1: ['once a week', 'week'],
              14: ['twice a day', 'half-day'],
              28: ['every six hours', 'six-hrs'],
              56: ['every three hours', 'three-hrs']}
+PATH_TO_500_TEMPLATE = path = os.path.join(os.path.dirname(__file__),
+                                           'templates', '500.html')
 
 
 def JsonAscii(obj):
@@ -517,10 +519,9 @@ def deadline_decorator(method):
       logging.exception(traceback_info)
       email_admins(traceback_info, defer_now=True)
 
-      path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
       self.response.clear()
       self.response.set_status(500)
-      self.response.out.write(template.render(path, {}))
+      self.response.out.write(template.render(PATH_TO_500_TEMPLATE, {}))
 
   return wrapped_method
 
@@ -557,10 +558,9 @@ class ExtendedHandler(RequestHandler):
     logging.exception(traceback_info)
     email_admins(traceback_info, defer_now=True)
 
-    path = os.path.join(os.path.dirname(__file__), 'templates', '500.html')
     self.response.clear()
     self.response.set_status(500)
-    self.response.out.write(template.render(path, {}))
+    self.response.out.write(template.render(PATH_TO_500_TEMPLATE, {}))
 
 
 # TODO(dhermes) make proposed change to AppEngine by calling super().post
