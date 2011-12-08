@@ -36,13 +36,8 @@ from secret_key import TOKEN
 from secret_key import TOKEN_SECRET
 
 
-URI = ('https://www.google.com/calendar/feeds/'
-       'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
-
-
 def main():
-  """
-  Processes main calendar event feed and writes some event data to a file
+  """Processes main calendar event feed and writes some event data to a file.
 
   get_calendar_event_feed uses a default desired_class of
   `gdata.calendar.data.CalendarEventFeed`
@@ -67,19 +62,21 @@ def main():
   # TODO(dhermes) fix the import issue for the authorized client
   # InitGCAL won't import since library.py has app engine imports
   # GCAL = InitGCAL()
-  GCAL = gdata.calendar.client.CalendarClient(source='persistent-cal')
+  gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
   auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
                                           consumer_secret=CONSUMER_SECRET,
                                           token=TOKEN,
                                           token_secret=TOKEN_SECRET,
                                           auth_state=3)
-  GCAL.auth_token = auth_token
+  gcal.auth_token = auth_token
+  uri = ('https://www.google.com/calendar/feeds/'
+         'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
 
-  feed = GCAL.get_calendar_event_feed(uri=URI)
+  feed = gcal.get_calendar_event_feed(uri=uri)
   total_results = int(feed.total_results.text)  # TODO(dhermes) catch error here
   if total_results > 25:
-    URI = '%s?max-results=%s' % (URI, total_results)
-    feed = GCAL.get_calendar_event_feed(uri=URI)
+    uri = '%s?max-results=%s' % (uri, total_results)
+    feed = gcal.get_calendar_event_feed(uri=uri)
 
   result = {}
   for event in feed.entry:

@@ -285,7 +285,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     upcoming:
     gcal:
   """
-  logging.info('%s called with: %s' % ('UpdateUpcoming', locals()))
+  logging.info('%s called with: %s', 'UpdateUpcoming', locals())
 
   if set(user_cal.upcoming) != set(upcoming):
     now = datetime.datetime.utcnow()
@@ -377,6 +377,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
   valid, link = WhiteList(link)
   if not valid:
     # Do nothing if not on the whitelist
+    # http://www.python.org/dev/peps/pep-0255/ (Specification: Return)
     return
 
   import_feed = urlopen(link)
@@ -538,7 +539,6 @@ class DecorateHttpVerbsMetaclass(type):
     decorate: get, post, put and delete. The other three supported
     (head, options, trace) may be added at a later time.
     Args:
-      cls:
       name:
       parents:
       cls_attr:
@@ -573,7 +573,7 @@ class TaskHandler(RequestHandler):
   """A {borrowed} webapp handler class that processes deferred invocations."""
 
   def post(self):
-    """Handles task queue POST requests"""
+    """Handles task queue POST requests."""
     if 'X-AppEngine-TaskName' not in self.request.headers:
       logging.critical('Detected an attempted XSRF attack. The header '
                        '"X-AppEngine-Taskname" was not set.')

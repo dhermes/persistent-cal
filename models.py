@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Model classes for persistent-cal"""
+"""Model classes for persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
@@ -25,7 +25,7 @@ from google.appengine.ext import db
 
 
 class Event(db.Model):
-  """Holds data for a calendar event (including shared attendees)"""
+  """Holds data for a calendar event (including shared attendees)."""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as simplejson
   gcal_edit = db.StringProperty(required=True)
@@ -35,7 +35,7 @@ class Event(db.Model):
 
 
 class UserCal(db.Model):
-  """Holds data for a calendar event (including shared owners)"""
+  """Holds data for a calendar event (including shared owners)."""
   owner = db.UserProperty(required=True)
   # hold calendar feed link as strings
   calendars = db.StringListProperty(required=True)
