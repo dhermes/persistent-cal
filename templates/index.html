@@ -132,8 +132,8 @@
     }
 
     $(window).load(function () {
-      draw_cal('{{ calendars }}');
-      freq_set('{{ frequency }}');
+      draw_cal('{{ calendars|safe }}');
+      freq_set('{{ frequency|safe }}');
 
       $('#cal-button').click(function () {
         $('#cal-data').show();
@@ -160,7 +160,7 @@
     <table id="status-table">
       <tr>
         <td style="border-right-style:solid; border-right-width:1px;">
-          Hello {{ id }}. </br> Thanks for signing up.
+          Hello {{ id|safe }}. </br> Thanks for signing up.
         </td>
         <td>
           <table id="subscriptions">
