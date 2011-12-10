@@ -1,0 +1,301 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2010-2011 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+"""Command Line Tool for persistent-cal"""
+
+
+__author__ = 'dhermes@google.com (Daniel Hermes)'
+
+
+# sys is always builtin
+import sys
+
+
+# Pretty print functions, preempt other imports for printing
+def print_msg_list(msg_list):
+  if isinstance(msg_list, str) or isinstance(msg_list, unicode):
+    msg_list = [msg_list]
+  
+  length = max(len(line) for line in msg_list)
+  result = ['| %s |' % line.ljust(length) for line in msg_list]
+  header = '+%s+' % ('-' * (length + 2))
+  result = [header] + result + [header]
+  
+  print '\n'.join(result)
+
+
+def terminate_with_msg(msg_list):
+  print_msg_list(msg_list)
+  sys.exit(1)
+
+
+# Remaining imports
+imports_needed = []
+required_libraries = ['argparse',
+                      'cookielib',
+                      'getpass',
+                      'simplejson',
+                      'urllib',
+                      'urllib2']
+for library in required_libraries:
+  try:
+    locals()[library] = __import__(library)
+  except ImportError:
+    imports_needed.append(library)
+
+
+# Define APP_ID before (optional) printing of import errors
+APP_ID = 'persistent-cal'
+if imports_needed:
+  msg_list = ['Failed to import necessary libraries.', '',
+              'To successfully use the %s command line tool,' % APP_ID,
+              'consider installing the missing libraries via:']
+
+  for library in imports_needed:
+    msg_list.append('sudo pip install %s' % library)
+
+
+  msg_list.extend(['', 'If you do not have pip installed, easy_install is a',
+                   'worthy replacement, but you should get pip though.',
+                   '', 'If you have neither, visit;',
+                   'http://www.pip-installer.org/en/latest/installing.html'])
+  terminate_with_msg(msg_list)
+
+
+# Constants
+ADD_ENDPOINT = 'http://%s.appspot.com/add' % APP_ID
+FREQ_ENDPOINT = 'http://%s.appspot.com/freq' % APP_ID
+CLIENT_LOGIN = 'https://www.google.com/accounts/ClientLogin'
+SITE_COOKIE_AUTH_URL = 'http://%s.appspot.com/_ah/login?auth=%s' % (APP_ID,
+                                                                    '%s')
+FREQUENCY_MAP = {56: 'three-hrs',
+                 28: 'six-hrs',
+                 14: 'half-day',
+                 7: 'day',
+                 4: 'two-day',
+                 1: 'week'}
+FREQUENCY_CHOICES = [str(key) for key in sorted(FREQUENCY_MAP.keys())]
+
+
+PARSER = argparse.ArgumentParser()
+PARSER.add_argument('-f', '--frequency', metavar='frq', type=int, default=-1,
+    help=('number of times per week that your personal '
+          'calendar will be synced with your subscribed calendars'))
+PARSER.add_argument('-a', '--add', metavar='link', type=unicode, default='',
+                    help='external calendar link to add as a subscription')
+
+
+def get_auth_val():
+  params = {'accountType': 'GOOGLE',
+            'service': 'ah',
+            'source': APP_ID}
+  params['Email'] = raw_input('Email address: ')
+  params['Passwd'] = getpass.getpass('Password: ')
+  params = urllib.urlencode(params)
+
+  auth_val = None
+  try:
+    auth_cnxn = urllib.urlopen(CLIENT_LOGIN, params)
+    auth_val = auth_cnxn.read()
+    auth_cnxn.close()
+  except IOError:
+    return (False, auth_val, 'Could not connect to Google.')
+  except:
+    return (False, auth_val, 'An unexpected error occurred.')
+  return (True, auth_val, None)
+
+
+def parse_auth_message(auth_val):
+  success = True
+  auth_cookie = None
+
+  result = ['Authentication failed.']
+  if 'Error=BadAuthentication' in auth_val:
+    success = False
+    if 'Info=InvalidSecondFactor' in auth_val:
+      result.extend(['',
+                     'Two factor authorization is not supported.',
+                     'Please use an application specific password.'])
+
+  auth_rows = [row for row in auth_val.split('\n') if row]
+  # SID=<some text>
+  # LSID=<some text>
+  # Auth=<some text>
+  if (len(auth_rows) != 3 or not auth_rows[0].startswith('SID=')
+      or not auth_rows[1].startswith('LSID=')
+      or not auth_rows[2].startswith('Auth=')):
+    success = False
+  else:
+    auth_cookie = auth_rows[2].lstrip('Auth=')
+
+  return (success, auth_cookie, result)
+
+
+def get_site_cookie(auth_cookie):
+  request_url = SITE_COOKIE_AUTH_URL % auth_cookie
+  cookie_jar = cookielib.CookieJar()
+  opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookie_jar))
+
+  cookie_val = None
+
+  try:
+    opener.open(request_url)
+  except urllib2.HTTPError:
+    return (False, cookie_val,
+            ['Connection error.', '',
+             'Could not reach %s to obtain a cookie.' % APP_ID])
+  except:
+    return (False, cookie_val, 'An unexpected error occurred.')
+
+  for cookie in cookie_jar:
+    if cookie.name == 'ACSID':
+      cookie_val = cookie.value
+      break
+
+  valid = cookie_val is not None
+  result = [] if valid else ['Authentication error.', '',
+                             'Could not retrieve cookie from %s.' % APP_ID]
+  return (valid, cookie_val, result)
+
+
+def add_subscription(cookie_val, payload):
+  calendar_link = payload.get('calendar-link', None)
+  if calendar_link is None:
+    return ['Unexpected behavior: library error.', '',
+            'No calendar link was specified in the HTTP payload.']
+  request = urllib2.Request(ADD_ENDPOINT)
+  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+  params = urllib.urlencode({'calendar-link': calendar_link})
+
+  try:
+    add_subs_cnxn = urllib2.urlopen(request, params)
+    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn.close()
+  except urllib2.HTTPError:
+    return  ['Connection error.', '',
+             'Could not reach %s to add %s.' % (APP_ID, calendar_link)]
+  except:
+    return 'An unexpected error occurred.'
+
+  if response_val == 'whitelist:fail':
+    return ['Feed is not on whitelist.', '',
+            'See http://%s.appspot.com/about.' % APP_ID]
+  elif response_val == 'limit:fail':
+    return ['You have reached the maximum number of feeds.', '',
+            'See http://%s.appspot.com/about.' % APP_ID]
+  elif response_val == 'contained:fail':
+    return 'You are already subscribed to this calendar feed.'
+  elif response_val == 'no_user:fail':
+    return 'No user was provided.'
+
+  return ['Success!', '', 'Your current subscriptions are:'] + response_val
+
+
+def change_frequency(cookie_val, payload):
+  frequency = payload.get('frequency', None)
+  if frequency is None:
+    return ['Unexpected behavior: library error.', '',
+            'No frequency was specified in the HTTP payload.']
+  # Let the server validate the frequency
+  if frequency in FREQUENCY_MAP:
+    frequency = FREQUENCY_MAP[frequency]
+
+  request = urllib2.Request(FREQ_ENDPOINT)
+  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+  params = urllib.urlencode({'frequency': frequency})
+
+  try:
+    add_subs_cnxn = urllib2.urlopen(request, params)
+    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn.close()
+  except urllib2.HTTPError:
+    return  ['Connection error.', '',
+             'Could not reach %s to add %s.' % (APP_ID, calendar_link)]
+  except:
+    return 'An unexpected error occurred.'
+
+  if response_val == 'no_cal:fail':
+    return 'You have no calendar to update.'
+  elif response_val == 'wrong_freq:fail':
+    return ['The value %s is not a valid frequency.' % frequency, '',
+            'This value represents the number of times per week that your',
+            'personal calendar will be synced with your subscribed calendars.',
+            'Choices are: %s.' % (', '.join(FREQUENCY_CHOICES))]
+  elif response_val == 'no_user:fail':
+    return 'No user was provided.'
+
+  # API returns tuple [<verbose description>, <short text val>] where
+  # the short value corresponds to tha in FREQUENCY_MAP
+  if (type(response_val) != list or len(response_val) != 2 or
+      response_val[1] != frequency):
+    return 'An unexpected error occurred.'
+
+  return ['Success!', '',
+          'Your subscriptions will be updated %s.' % response_val[0]]
+
+
+def make_request(action, payload):
+  if action.lower() not in ['add', 'frequency', 'getinfo']:
+    return ''
+
+  success_auth, auth_val, result = get_auth_val()
+  if not success_auth or auth_val is None:
+    terminate_with_msg(result)
+  
+  success_cookie, auth_cookie, result = parse_auth_message(auth_val)
+  if not success_cookie or auth_cookie is None:
+    terminate_with_msg(result)
+
+  valid, cookie_val, result = get_site_cookie(auth_cookie)
+  if not valid or cookie_val is None:
+    terminate_with_msg(result)
+
+  response_val = ''
+  try:
+    if action.lower() == 'add':
+      response_val = add_subscription(cookie_val, payload)
+    elif action.lower() == 'frequency':
+      response_val = change_frequency(cookie_val, payload)
+  except SystemExit:
+    raise
+  except:
+    response_val = 'An unexpected error occurred.'
+  print_msg_list(response_val)
+
+
+if __name__ == '__main__':
+  args = PARSER.parse_args()
+  if args.add != '' and args.frequency != -1:
+    msg_list = ['Both a frequency update and a new subscription have',
+                'been requested. Please select only one of the actions.']
+    terminate_with_msg(msg_list)
+
+  if args.add != '':
+    action = 'add'
+    payload = {'calendar-link': args.add}
+  elif args.frequency != -1:
+    action = 'frequency'
+    payload = {'frequency': args.frequency}
+  else:
+    sys.exit(1)
+
+  try:
+    make_request(action, payload)
+  except KeyboardInterrupt:
+    print '\n\n',
+    print_msg_list(['Sorry I couldn\'t be more helpful.',
+                    'That hurts when you cancel me!'])

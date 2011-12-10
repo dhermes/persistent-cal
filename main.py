@@ -211,6 +211,28 @@ class ChangeFrequency(ExtendedHandler):
       return
 
 
+class GetInfoHandler(ExtendedHandler):
+  """Handles get requests to /getinfo and returns calendar/frequency info."""
+
+  def get(self):
+    """Handles get requests to /getinfo."""
+    current_user = users.get_current_user()
+    if current_user is None:
+      self.response.out.write(simplejson.dumps('no_user:fail'))
+      logging.info('no_user:fail')
+      return
+
+    user_cal = UserCal.get_by_key_name(current_user.user_id())
+    if user_cal is None:
+      self.response.out.write(simplejson.dumps('no_cal:fail'))
+      logging.info('no_cal:fail')
+      return
+
+    user_info = simplejson.dumps((user_cal.calendars,
+                                  len(user_cal.update_intervals)))
+    self.response.out.write(user_info)
+
+
 class DeferredHandler(ExtendedHandler, TaskHandler):
   pass
 
@@ -249,8 +271,9 @@ application = WSGIApplication([
     ('/workers', DeferredHandler),
     ('/add', AddSubscription),
     ('/freq', ChangeFrequency),
+    ('/getinfo', GetInfoHandler),
     ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
-    ('/about.html', AboutHandler),
+    ('/about', AboutHandler),
     ('/.*', Throw404),
     ], debug=True)
 

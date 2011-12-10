@@ -49,7 +49,7 @@
         spawnAlert('You have reached the maximum number of feeds.');
       } else if (parsed_data === 'contained:fail') {
         spawnAlert('You are already subscribed to this calendar feed.');
-      } else if (frequency === 'no_user:fail') {
+      } else if (parsed_data === 'no_user:fail') {
         spawnAlert('No user was provided.');
       } else {
         draw_cal(data);
@@ -216,7 +216,7 @@
     <div id="alerts"></div>
 
     <div id="footer">
-      <p><a href="/about.html">About</a></br>
+      <p><a href="/about">About</a></br>
       persistent-cal is managed by Danny Hermes.</br>
       Please contact dhermes@google.com for any questions.</p>
     </div>
