@@ -68,7 +68,6 @@ if imports_needed:
   for library in imports_needed:
     msg_list.append('sudo pip install %s' % library)
 
-
   msg_list.extend(['', 'If you do not have pip installed, easy_install is a',
                    'worthy replacement, but you should get pip though.',
                    '', 'If you have neither, visit;',
@@ -79,6 +78,7 @@ if imports_needed:
 # Constants
 ADD_ENDPOINT = 'http://%s.appspot.com/add' % APP_ID
 FREQ_ENDPOINT = 'http://%s.appspot.com/freq' % APP_ID
+GETINFO_ENDPOINT = 'http://%s.appspot.com/getinfo' % APP_ID
 CLIENT_LOGIN = 'https://www.google.com/accounts/ClientLogin'
 SITE_COOKIE_AUTH_URL = 'http://%s.appspot.com/_ah/login?auth=%s' % (APP_ID,
                                                                     '%s')
@@ -89,14 +89,20 @@ FREQUENCY_MAP = {56: 'three-hrs',
                  4: 'two-day',
                  1: 'week'}
 FREQUENCY_CHOICES = [str(key) for key in sorted(FREQUENCY_MAP.keys())]
-
-
-PARSER = argparse.ArgumentParser()
-PARSER.add_argument('-f', '--frequency', metavar='frq', type=int, default=-1,
+PARSER = argparse.ArgumentParser(prog=APP_ID,
+    description='Command Line Tool for persistent-cal')
+SUBPARSERS = PARSER.add_subparsers(help='persistent-cal subcommands')
+PARSER_ADD = SUBPARSERS.add_parser('add', help='Add subscription to calendar')
+PARSER_ADD.add_argument('add', metavar='link', type=unicode, default='',
+                        help='external calendar link to add as a subscription')
+PARSER_CHG = SUBPARSERS.add_parser('chg',
+                                   help='Change frequency of calendar updates')
+PARSER_CHG.add_argument('chg', metavar='freq', type=int, default=-1,
     help=('number of times per week that your personal '
           'calendar will be synced with your subscribed calendars'))
-PARSER.add_argument('-a', '--add', metavar='link', type=unicode, default='',
-                    help='external calendar link to add as a subscription')
+PARSER_GETINFO = SUBPARSERS.add_parser('getinfo',
+    help='Get existing calendar info')
+PARSER_GETINFO.add_argument('getinfo', action='store_true')
 
 
 def get_auth_val():
@@ -248,6 +254,35 @@ def change_frequency(cookie_val, payload):
           'Your subscriptions will be updated %s.' % response_val[0]]
 
 
+def get_info(cookie_val):
+  request = urllib2.Request(GETINFO_ENDPOINT)
+  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+
+  try:
+    add_subs_cnxn = urllib2.urlopen(request)
+    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn.close()
+  except urllib2.HTTPError:
+    return  ['Connection error.', '',
+             'Could not reach %s to get info.' % APP_ID]
+  except:
+    return 'An unexpected error occurred.'
+
+  if response_val == 'no_user:fail':
+    return 'No user was provided.'
+  elif response_val == 'no_cal:fail':
+    return 'You have no calendar to update.'
+
+  # API returns tuple [<calendars>, <frequency>]
+  if (type(response_val) != list or len(response_val) != 2 or
+      type(response_val[0]) != list):
+    return 'An unexpected error occurred.'
+
+  calendars, verbose_freq = response_val
+  return ['Your subscriptions will be updated %s.' % verbose_freq,
+          '', 'Your current subscriptions are:'] + calendars
+
+
 def make_request(action, payload):
   if action.lower() not in ['add', 'frequency', 'getinfo']:
     return ''
@@ -264,12 +299,15 @@ def make_request(action, payload):
   if not valid or cookie_val is None:
     terminate_with_msg(result)
 
-  response_val = ''
   try:
     if action.lower() == 'add':
       response_val = add_subscription(cookie_val, payload)
     elif action.lower() == 'frequency':
       response_val = change_frequency(cookie_val, payload)
+    elif action.lower() == 'getinfo':
+      response_val = get_info(cookie_val)
+    else:
+      response_val = 'An unexpected error occurred.'
   except SystemExit:
     raise
   except:
@@ -279,17 +317,19 @@ def make_request(action, payload):
 
 if __name__ == '__main__':
   args = PARSER.parse_args()
-  if args.add != '' and args.frequency != -1:
-    msg_list = ['Both a frequency update and a new subscription have',
-                'been requested. Please select only one of the actions.']
-    terminate_with_msg(msg_list)
+  add_val = getattr(args, 'add', '')
+  frequency_val = getattr(args, 'chg', -1)
+  getinfo = getattr(args, 'getinfo', False)
 
-  if args.add != '':
+  if add_val != '':
     action = 'add'
-    payload = {'calendar-link': args.add}
-  elif args.frequency != -1:
+    payload = {'calendar-link': add_val}
+  elif frequency_val != -1:
     action = 'frequency'
-    payload = {'frequency': args.frequency}
+    payload = {'frequency': frequency_val}
+  elif getinfo:
+    action = 'getinfo'
+    payload = {}
   else:
     sys.exit(1)
 

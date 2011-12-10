@@ -228,8 +228,8 @@ class GetInfoHandler(ExtendedHandler):
       logging.info('no_cal:fail')
       return
 
-    user_info = simplejson.dumps((user_cal.calendars,
-                                  len(user_cal.update_intervals)))
+    freq_data = simplejson.loads(UpdateString(user_cal.update_intervals))
+    user_info = simplejson.dumps((user_cal.calendars, freq_data[0]))
     self.response.out.write(user_info)
 
 
