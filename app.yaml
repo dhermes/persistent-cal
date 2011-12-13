@@ -15,6 +15,10 @@ handlers:
 - url: /javascripts
   static_dir: javascripts
 
+- url: /scripts
+  static_dir: scripts
+  mime_type: "text/plain"
+
 - url: /cron
   script: cron.py
   login: admin
