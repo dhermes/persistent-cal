@@ -70,6 +70,8 @@
         spawnAlert('That is not a valid frequency.');
       } else if (frequency === 'no_user:fail') {
         spawnAlert('No user was provided.');
+      } else if (frequency === 'method_not_supported:fail') {
+        spawnAlert('That method is not supported.');
       } else {
         var frequency_verbose = frequency[0],
             frequency_val = frequency[1];
@@ -149,8 +151,8 @@
 
       $('#freq').submit(function () {
         $.post('/freq',
-               {'frequency': $('#frequency').val()},
-               freq_reset);
+              {'_method': 'PUT', 'frequency': $('#frequency').val()},
+              freq_reset);
         return false;
       });
     });

@@ -163,10 +163,24 @@ class AddSubscription(ExtendedHandler):
 
 
 class ChangeFrequency(ExtendedHandler):
-  """Handles post requests to /freq and will change frequency for a user."""
+  """Handles put/post requests to /freq and will change frequency for a user."""
 
   def post(self):
     """Handles post requests to /freq.
+
+    This is to allow browsers to send POST requests by including PUT as
+    _method. If we find the correct value, we forward the request to
+    the PUT handler.
+    """
+    method = self.request.get('_method', '')
+    if method.upper() == 'PUT':
+      self.put()
+    else:
+      self.response.out.write(simplejson.dumps('method_not_supported:fail'))
+      logging.info('method_not_supported:fail')
+
+  def put(self):
+    """Handles put requests to /freq.
 
     Validates the user, the user calendar, and the frequency value from the
     post request. If any of those three are not valid, nothing in the datastore
@@ -212,7 +226,7 @@ class ChangeFrequency(ExtendedHandler):
 
 
 class GetInfoHandler(ExtendedHandler):
-  """Handles get requests to /getinfo and returns calendar/frequency info."""
+  """Handles get requests to /getinfo and returns calendar & frequency info."""
 
   def get(self):
     """Handles get requests to /getinfo."""

@@ -29,12 +29,12 @@ import sys
 def print_msg_list(msg_list):
   if isinstance(msg_list, str) or isinstance(msg_list, unicode):
     msg_list = [msg_list]
-  
+
   length = max(len(line) for line in msg_list)
   result = ['| %s |' % line.ljust(length) for line in msg_list]
   header = '+%s+' % ('-' * (length + 2))
   result = [header] + result + [header]
-  
+
   print '\n'.join(result)
 
 
@@ -230,7 +230,7 @@ def change_frequency(cookie_val, payload):
     add_subs_cnxn.close()
   except urllib2.HTTPError:
     return  ['Connection error.', '',
-             'Could not reach %s to add %s.' % (APP_ID, calendar_link)]
+             'Could not reach %s to change freq to %s.' % (APP_ID, frequency)]
   except:
     return 'An unexpected error occurred.'
 
@@ -290,7 +290,7 @@ def make_request(action, payload):
   success_auth, auth_val, result = get_auth_val()
   if not success_auth or auth_val is None:
     terminate_with_msg(result)
-  
+
   success_cookie, auth_cookie, result = parse_auth_message(auth_val)
   if not success_cookie or auth_cookie is None:
     terminate_with_msg(result)
