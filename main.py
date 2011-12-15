@@ -22,6 +22,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
+from cgi import parse_qs
 from datetime import datetime
 import logging
 import os
@@ -163,21 +164,7 @@ class AddSubscription(ExtendedHandler):
 
 
 class ChangeFrequency(ExtendedHandler):
-  """Handles put/post requests to /freq and will change frequency for a user."""
-
-  def post(self):
-    """Handles post requests to /freq.
-
-    This is to allow browsers to send POST requests by including PUT as
-    _method. If we find the correct value, we forward the request to
-    the PUT handler.
-    """
-    method = self.request.get('_method', '')
-    if method.upper() == 'PUT':
-      self.put()
-    else:
-      self.response.out.write(simplejson.dumps('method_not_supported:fail'))
-      logging.info('method_not_supported:fail')
+  """Handles put requests to /freq and will change frequency for a user."""
 
   def put(self):
     """Handles put requests to /freq.
@@ -201,7 +188,13 @@ class ChangeFrequency(ExtendedHandler):
       logging.info('no_user:fail')
       return
 
-    frequency = self.request.get('frequency', None)
+    # PUT is broken in webob, self.request.get('frequency', None) won't work
+    # http://code.google.com/p/googleappengine/issues/detail?id=719
+    params = parse_qs(self.request.body)
+    frequency = None
+    if 'frequency' in params and len(params['frequency']) == 1:
+      frequency = params['frequency'][0]
+
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if frequency in FREQUENCIES and user_cal is not None:
       if user_cal.update_intervals:

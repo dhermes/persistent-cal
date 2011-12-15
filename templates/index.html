@@ -150,9 +150,12 @@
       });
 
       $('#freq').submit(function () {
-        $.post('/freq',
-              {'_method': 'PUT', 'frequency': $('#frequency').val()},
-              freq_reset);
+        $.ajax({
+           type: 'PUT',
+           url: '/freq',
+           data: {'frequency': $('#frequency').val()},
+           success: freq_reset
+        });
         return false;
       });
     });
