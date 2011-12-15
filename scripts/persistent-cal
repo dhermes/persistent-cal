@@ -222,6 +222,7 @@ def change_frequency(cookie_val, payload):
 
   request = urllib2.Request(FREQ_ENDPOINT)
   request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+  request.get_method = lambda: 'PUT'
   params = urllib.urlencode({'frequency': frequency})
 
   try:
