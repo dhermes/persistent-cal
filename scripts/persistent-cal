@@ -15,18 +15,238 @@
 # limitations under the License.
 
 
-"""Command Line Tool for persistent-cal"""
+"""Command Line Tool for persistent-cal."""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
-# sys is always builtin
 import sys
 
+# Constants
+APP_ID = 'persistent-cal'
+ADD_ENDPOINT = 'http://%s.appspot.com/add' % APP_ID
+FREQ_ENDPOINT = 'http://%s.appspot.com/freq' % APP_ID
+GETINFO_ENDPOINT = 'http://%s.appspot.com/getinfo' % APP_ID
+LOGIN_ENDPOINT = 'http://%s.appspot.com/_ah/login?auth=' % APP_ID
+CLIENT_LOGIN = 'https://www.google.com/accounts/ClientLogin'
+APPLICATION_AUTH_URL_TEMPLATE = LOGIN_ENDPOINT + '%s'
+REQUIRED_LIBRARIES = ['argparse',
+                      'cookielib',
+                      'getpass',
+                      'simplejson',
+                      'urllib',
+                      'urllib2']
+FREQUENCY_MAP = {56: 'three-hrs',
+                 28: 'six-hrs',
+                 14: 'half-day',
+                 7: 'day',
+                 4: 'two-day',
+                 1: 'week'}
+FREQUENCY_CHOICES = [str(key) for key in sorted(FREQUENCY_MAP.keys())]
+ERROR_RESPONSES = {
+    'add': {'whitelist:fail': ['Feed is not on whitelist.', '',
+                               'See http://%s.appspot.com/about.' % APP_ID],
+            'limit:fail': ['You have reached the maximum number of feeds.', '',
+                           'See http://%s.appspot.com/about.' % APP_ID],
+            'contained:fail': ('You are already subscribed to this '
+                               'calendar feed.'),
+            'no_user:fail': 'No user was provided.'},
+    'chg': {'no_cal:fail': 'You have no calendar to update.',
+            'wrong_freq:fail':
+            ['The value given is not a valid frequency.', '',
+             'This value represents the number of times per week that your',
+             'personal calendar will be synced with your subscribed calendars.',
+             'Choices are: %s.' % (', '.join(FREQUENCY_CHOICES))],
+            'no_user:fail': 'No user was provided.'},
+    'getinfo': {'no_user:fail': 'No user was provided.',
+                'no_cal:fail': 'You have never used %s.' % APP_ID}}
 
-# Pretty print functions, preempt other imports for printing
-def print_msg_list(msg_list):
+
+class AuthException(Exception):
+  """Thrown when an authentication error occurs."""
+
+
+class APIUseException(Exception):
+  """Thrown when the API is used incorrectly or returns an error."""
+
+
+class APIAuthManager(object):
+  """Class for handling AppEngine application auth via Client Login."""
+
+  client_auth = None
+  application_auth = None
+
+  def __init__(self, email, application_id=APP_ID):
+    self.email = email
+    self.application_id = application_id
+
+  def __repr__(self):
+    return 'APIAuthManager(%s, app=%s, state=%s)' % (self.email,
+                                                     self.application_id,
+                                                     self.status)
+
+  @property
+  def state(self):
+    """State value using client auth as 1st binary bit and app auth as 2nd."""
+    if self.client_auth is None:
+      return 0 if self.application_auth is None else 1
+    else:
+      return 2 if self.application_auth is None else 3
+
+  @property
+  def status(self):
+    """Verbose status message for each auth state."""
+    state_map = {0: 'No Auth Completed',
+                 1: 'Login Corrupted',
+                 2: 'Client Login Completed',
+                 3: 'Auth Complete'}
+    return state_map[self.state]
+
+  def _GetClientAuthResponse(self, password, client_login=CLIENT_LOGIN):
+    """Submit client login request and return response body.
+
+    Args:
+      password: the password of the user
+      client_login: the url used to make client login requests, defaults to the
+          global value CLIENT_LOGIN
+
+    Returns:
+      auth_response: The body of the client login response if successful,
+        else None
+
+    Raises:
+      AuthException: in the case that the auth_response is not set
+    """
+    params = urllib.urlencode(  # pylint:disable-msg=E0602
+        {'accountType': 'GOOGLE',
+         'service': 'ah',
+         'source': self.application_id,
+         'Email': self.email,
+         'Passwd': password})
+
+    auth_response = None
+    try:
+      auth_cnxn = urllib.urlopen(  # pylint:disable-msg=E0602
+          client_login, params)
+      auth_response = auth_cnxn.read()
+      auth_cnxn.close()
+    except IOError:
+      pass
+
+    if auth_response is None:
+      raise AuthException('Could not connect to Google.')
+
+    return auth_response
+
+  def GetClientAuth(self, client_login=CLIENT_LOGIN):
+    """Get Auth Token for user from client login.
+
+    The body of the response is expected to be three lines, beginning
+    with SID=, LSID= and Auth=, and in that order. If the authentication
+    was not successful, we expect 'Error=BadAuthentication' to be in the
+    response. If the failure was caused by a user having two factor
+    authentication activated, we expect 'Info=InvalidSecondFactor' to
+    be in the response as well
+
+    Args:
+      client_login: the url used to make client login requests, defaults to the
+          global value CLIENT_LOGIN
+
+    Returns:
+      self.client_auth: the final value of client auth. If by the end of the
+          method, it has not been set, AuthException will be raised.
+
+    Raises:
+      AuthException: in the case that _GetClientAuthResponse returns None, the
+          response contains BadAuthentication or is an unexpected format.
+    """
+    password = getpass.getpass('Password: ')  # pylint:disable-msg=E0602
+    auth_response = self._GetClientAuthResponse(password, client_login)
+
+    if 'Error=BadAuthentication' in auth_response:
+      to_raise = ['Authentication failed.']
+      if 'Info=InvalidSecondFactor' in auth_response:
+        to_raise.extend(['',
+                         'Two factor authorization is not supported.',
+                         'Please use an application specific password.'])
+      raise AuthException(to_raise)
+
+    auth_rows = [row for row in auth_response.split('\n') if row]
+    if len(auth_rows) == 3:
+      sid_row, lsid_row, auth_row = auth_rows
+      if (sid_row.startswith('SID=') and lsid_row.startswith('LSID=') and
+          auth_row.startswith('Auth=')):
+        self.client_auth = auth_row.lstrip('Auth=')
+
+    if self.client_auth is None:
+      raise AuthException('Client login failed.')
+
+    return self.client_auth
+
+  def GetApplicationAuth(self, request_url=None, client_login=CLIENT_LOGIN):
+    """Obtain application specific cookie by using self.client_auth.
+
+    In order to make API requests, we need to use the Google account cookie to
+    authenticate with the application and then keep the application specific
+    cookie for later use.
+
+    Args:
+      request_url: application specific url to request a cookie given a
+          client auth token has been obtained. In default case, is set to None,
+          and the script will set it with the client auth token and a url
+          template.
+      client_login: the url used to make client login requests, defaults to the
+          global value CLIENT_LOGIN
+
+    Returns:
+      self.application_auth: the final value of the application cookie. If by
+          the end of the method, it has not been set, AuthException
+          will be raised.
+
+    Raises:
+      AuthException: in the case that GetClientAuth raises it, the inital
+          request fails, or no ACSID= cookie is returned
+    """
+    if self.state < 2:
+      self.GetClientAuth(client_login)
+
+    if request_url is None:
+      request_url = APPLICATION_AUTH_URL_TEMPLATE % self.client_auth
+
+    cookie_jar = cookielib.CookieJar()  # pylint:disable-msg=E0602
+    opener = urllib2.build_opener(  # pylint:disable-msg=E0602
+        urllib2.HTTPCookieProcessor(cookie_jar))  # pylint:disable-msg=E0602
+
+    try:
+      opener.open(request_url)
+    except urllib2.HTTPError:  # pylint:disable-msg=E0602
+      raise AuthException(
+          ['Connection error.', '',
+           'Could not reach %s to obtain a cookie.' % self.application_id])
+
+    for cookie in cookie_jar:
+      if cookie.name == 'ACSID':
+        self.application_auth = cookie.value
+        break
+
+    if self.application_auth is None:
+      raise AuthException(
+          ['Authentication error.', '',
+           'Could not retrieve cookie from %s.' % self.application_id])
+
+    return self.application_auth
+
+
+def PrintMessageList(msg_list):
+  """Print a list with a nice box format.
+
+  The input is surrounded by a box with | on edges, - across the top and
+  + in each corner.
+
+  Args:
+    msg_list: A string or a list of strings.
+  """
   if isinstance(msg_list, str) or isinstance(msg_list, unicode):
     msg_list = [msg_list]
 
@@ -38,305 +258,325 @@ def print_msg_list(msg_list):
   print '\n'.join(result)
 
 
-def terminate_with_msg(msg_list):
-  print_msg_list(msg_list)
+def TerminateWithMessage(msg_list):
+  """Print a failure/success message and raise SystemExit with value 1.
+
+  In the case of an extreme failure, this allows an error message to be
+  printed and the calling function to exit the script.
+
+  Args:
+    msg_list: A string or a list of strings to be printed with PrintMessageList
+
+  Raises:
+    SystemExit: with exit code 1
+  """
+  PrintMessageList(msg_list)
   sys.exit(1)
 
 
-# Remaining imports
-imports_needed = []
-required_libraries = ['argparse',
-                      'cookielib',
-                      'getpass',
-                      'simplejson',
-                      'urllib',
-                      'urllib2']
-for library in required_libraries:
-  try:
-    locals()[library] = __import__(library)
-  except ImportError:
-    imports_needed.append(library)
+def AddSubscription(application_auth, payload):
+  """Attempts to add a calendar link for the authenticated user via the API.
 
+  If the payload dictionary  does not contain the key 'calendar-link', we return
+  an error message. If it does, the calendar link is sent to the API and either
+  the new subscription list is returned by the API or an JSON error message
+  is returned explaining why the link was rejected.
 
-# Define APP_ID before (optional) printing of import errors
-APP_ID = 'persistent-cal'
-if imports_needed:
-  msg_list = ['Failed to import necessary libraries.', '',
-              'To successfully use the %s command line tool,' % APP_ID,
-              'consider installing the missing libraries via:']
+  Args:
+    application_auth: the ACSID cookie specific to the application and the user
+    payload: a dictionary corresponding to the necessary data to make an API
+        request. For this function, we expect the key 'calendar-link' and the
+        value we expect to be any string.
 
-  for library in imports_needed:
-    msg_list.append('sudo pip install %s' % library)
+  Returns:
+    A list of lines or a string instance to be passed to PrintMessageList or
+        TerminateWithMessage to alert the user of failure or success
 
-  msg_list.extend(['', 'If you do not have pip installed, easy_install is a',
-                   'worthy replacement, but you should get pip though.',
-                   '', 'If you have neither, visit;',
-                   'http://www.pip-installer.org/en/latest/installing.html'])
-  terminate_with_msg(msg_list)
-
-
-# Constants
-ADD_ENDPOINT = 'http://%s.appspot.com/add' % APP_ID
-FREQ_ENDPOINT = 'http://%s.appspot.com/freq' % APP_ID
-GETINFO_ENDPOINT = 'http://%s.appspot.com/getinfo' % APP_ID
-CLIENT_LOGIN = 'https://www.google.com/accounts/ClientLogin'
-SITE_COOKIE_AUTH_URL = 'http://%s.appspot.com/_ah/login?auth=%s' % (APP_ID,
-                                                                    '%s')
-FREQUENCY_MAP = {56: 'three-hrs',
-                 28: 'six-hrs',
-                 14: 'half-day',
-                 7: 'day',
-                 4: 'two-day',
-                 1: 'week'}
-FREQUENCY_CHOICES = [str(key) for key in sorted(FREQUENCY_MAP.keys())]
-PARSER = argparse.ArgumentParser(prog=APP_ID,
-    description='Command Line Tool for persistent-cal')
-SUBPARSERS = PARSER.add_subparsers(help='persistent-cal subcommands')
-PARSER_ADD = SUBPARSERS.add_parser('add', help='Add subscription to calendar')
-PARSER_ADD.add_argument('add', metavar='link', type=unicode, default='',
-                        help='external calendar link to add as a subscription')
-PARSER_CHG = SUBPARSERS.add_parser('chg',
-                                   help='Change frequency of calendar updates')
-PARSER_CHG.add_argument('chg', metavar='freq', type=int, default=-1,
-    help=('number of times per week that your personal '
-          'calendar will be synced with your subscribed calendars'))
-PARSER_GETINFO = SUBPARSERS.add_parser('getinfo',
-    help='Get existing calendar info')
-PARSER_GETINFO.add_argument('getinfo', action='store_true')
-
-
-def get_auth_val():
-  params = {'accountType': 'GOOGLE',
-            'service': 'ah',
-            'source': APP_ID}
-  params['Email'] = raw_input('Email address: ')
-  params['Passwd'] = getpass.getpass('Password: ')
-  params = urllib.urlencode(params)
-
-  auth_val = None
-  try:
-    auth_cnxn = urllib.urlopen(CLIENT_LOGIN, params)
-    auth_val = auth_cnxn.read()
-    auth_cnxn.close()
-  except IOError:
-    return (False, auth_val, 'Could not connect to Google.')
-  except:
-    return (False, auth_val, 'An unexpected error occurred.')
-  return (True, auth_val, None)
-
-
-def parse_auth_message(auth_val):
-  success = True
-  auth_cookie = None
-
-  result = ['Authentication failed.']
-  if 'Error=BadAuthentication' in auth_val:
-    success = False
-    if 'Info=InvalidSecondFactor' in auth_val:
-      result.extend(['',
-                     'Two factor authorization is not supported.',
-                     'Please use an application specific password.'])
-
-  auth_rows = [row for row in auth_val.split('\n') if row]
-  # SID=<some text>
-  # LSID=<some text>
-  # Auth=<some text>
-  if (len(auth_rows) != 3 or not auth_rows[0].startswith('SID=')
-      or not auth_rows[1].startswith('LSID=')
-      or not auth_rows[2].startswith('Auth=')):
-    success = False
-  else:
-    auth_cookie = auth_rows[2].lstrip('Auth=')
-
-  return (success, auth_cookie, result)
-
-
-def get_site_cookie(auth_cookie):
-  request_url = SITE_COOKIE_AUTH_URL % auth_cookie
-  cookie_jar = cookielib.CookieJar()
-  opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookie_jar))
-
-  cookie_val = None
-
-  try:
-    opener.open(request_url)
-  except urllib2.HTTPError:
-    return (False, cookie_val,
-            ['Connection error.', '',
-             'Could not reach %s to obtain a cookie.' % APP_ID])
-  except:
-    return (False, cookie_val, 'An unexpected error occurred.')
-
-  for cookie in cookie_jar:
-    if cookie.name == 'ACSID':
-      cookie_val = cookie.value
-      break
-
-  valid = cookie_val is not None
-  result = [] if valid else ['Authentication error.', '',
-                             'Could not retrieve cookie from %s.' % APP_ID]
-  return (valid, cookie_val, result)
-
-
-def add_subscription(cookie_val, payload):
+  Raises:
+    APIUseException: in the case that no link is in the http payload, the
+        request times out, the API returns an error in ERROR_RESPONSES
+        or the response is not a list of length 4 or less
+  """
   calendar_link = payload.get('calendar-link', None)
   if calendar_link is None:
-    return ['Unexpected behavior: library error.', '',
-            'No calendar link was specified in the HTTP payload.']
-  request = urllib2.Request(ADD_ENDPOINT)
-  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
-  params = urllib.urlencode({'calendar-link': calendar_link})
+    raise APIUseException(['Unexpected behavior: library error.', '',
+                           'No calendar link was specified in the payload.'])
+
+  request = urllib2.Request(ADD_ENDPOINT)  # pylint:disable-msg=E0602
+  request.add_header('Cookie', 'ACSID=%s' % application_auth)
+  params = urllib.urlencode(  # pylint:disable-msg=E0602
+      {'calendar-link': calendar_link})
 
   try:
-    add_subs_cnxn = urllib2.urlopen(request, params)
-    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn = urllib2.urlopen(request, params)  # pylint:disable-msg=E0602
+    response_val = simplejson.loads(  # pylint:disable-msg=E0602
+        add_subs_cnxn.read())
     add_subs_cnxn.close()
-  except urllib2.HTTPError:
-    return  ['Connection error.', '',
-             'Could not reach %s to add %s.' % (APP_ID, calendar_link)]
-  except:
-    return 'An unexpected error occurred.'
+  except urllib2.HTTPError:  # pylint:disable-msg=E0602
+    raise APIUseException([
+        'Connection error.', '',
+        'Could not reach %s to add %s.' % (APP_ID, calendar_link)])
 
-  if response_val == 'whitelist:fail':
-    return ['Feed is not on whitelist.', '',
-            'See http://%s.appspot.com/about.' % APP_ID]
-  elif response_val == 'limit:fail':
-    return ['You have reached the maximum number of feeds.', '',
-            'See http://%s.appspot.com/about.' % APP_ID]
-  elif response_val == 'contained:fail':
-    return 'You are already subscribed to this calendar feed.'
-  elif response_val == 'no_user:fail':
-    return 'No user was provided.'
+  # Output may be a list, which is unhashable
+  if response_val in ERROR_RESPONSES['add'].keys():
+    raise APIUseException(ERROR_RESPONSES['add'][response_val])
+
+  if type(response_val) != list or len(response_val) > 4:
+    raise APIUseException('An unexpected error occurred.')
 
   return ['Success!', '', 'Your current subscriptions are:'] + response_val
 
 
-def change_frequency(cookie_val, payload):
+def ChangeFrequency(application_auth, payload):
+  """Attempts to change the frequency for the authenticated user via the API.
+
+  If the payload dictionary  does not contain the key 'frequency', we return an
+  error message. If the frequency provided is contained in FREQUENCY_MAP, we
+  transform the value and let the API determine if the transformed value is
+  valid. If the cookie value is not valid or the server can't be reached, an
+  error message is returned to be printed by the caller.
+
+  In the case of success, the API returns a JSON tuple (verbose, short) where
+  verbose if the human readable version of the frequency and short is the
+  version used as a shorthand.
+
+  Args:
+    application_auth: the ACSID cookie specific to the application and the user
+    payload: a dictionary corresponding to the necessary data to make an API
+        request. For this function, we expect the key 'frequency' and the value
+        we expect to be a key in the constant FREQUENCY_MAP.
+
+  Returns:
+    A list of lines or a string instance to be passed to PrintMessageList or
+        TerminateWithMessage to alert the user of failure or success
+
+  Raises:
+    APIUseException: in the case that frequency is not in the http payload, the
+        request times out, the API returns an error in ERROR_RESPONSES
+        or the response is not a list of length 2
+  """
   frequency = payload.get('frequency', None)
   if frequency is None:
-    return ['Unexpected behavior: library error.', '',
-            'No frequency was specified in the HTTP payload.']
-  # Let the server validate the frequency
+    raise APIUseException(['Unexpected behavior: library error.', '',
+                           'No frequency was specified in the HTTP payload.'])
+
   if frequency in FREQUENCY_MAP:
     frequency = FREQUENCY_MAP[frequency]
 
-  request = urllib2.Request(FREQ_ENDPOINT)
-  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+  request = urllib2.Request(FREQ_ENDPOINT)  # pylint:disable-msg=E0602
+  request.add_header('Cookie', 'ACSID=%s' % application_auth)
   request.get_method = lambda: 'PUT'
-  params = urllib.urlencode({'frequency': frequency})
+  params = urllib.urlencode(  # pylint:disable-msg=E0602
+      {'frequency': frequency})
 
   try:
-    add_subs_cnxn = urllib2.urlopen(request, params)
-    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn = urllib2.urlopen(request, params)  # pylint:disable-msg=E0602
+    response_val = simplejson.loads(  # pylint:disable-msg=E0602
+        add_subs_cnxn.read())
     add_subs_cnxn.close()
-  except urllib2.HTTPError:
-    return  ['Connection error.', '',
-             'Could not reach %s to change freq to %s.' % (APP_ID, frequency)]
-  except:
-    return 'An unexpected error occurred.'
+  except urllib2.HTTPError:  # pylint:disable-msg=E0602
+    raise APIUseException(
+        ['Connection error.', '',
+         'Could not reach %s to change freq to %s.' % (APP_ID, frequency)])
 
-  if response_val == 'no_cal:fail':
-    return 'You have no calendar to update.'
-  elif response_val == 'wrong_freq:fail':
-    return ['The value %s is not a valid frequency.' % frequency, '',
-            'This value represents the number of times per week that your',
-            'personal calendar will be synced with your subscribed calendars.',
-            'Choices are: %s.' % (', '.join(FREQUENCY_CHOICES))]
-  elif response_val == 'no_user:fail':
-    return 'No user was provided.'
+  # Output may be a list, which is unhashable
+  if response_val in ERROR_RESPONSES['chg'].keys():
+    raise APIUseException(ERROR_RESPONSES['chg'][response_val])
 
-  # API returns tuple [<verbose description>, <short text val>] where
-  # the short value corresponds to tha in FREQUENCY_MAP
   if (type(response_val) != list or len(response_val) != 2 or
       response_val[1] != frequency):
-    return 'An unexpected error occurred.'
+    raise APIUseException('An unexpected error occurred.')
 
   return ['Success!', '',
           'Your subscriptions will be updated %s.' % response_val[0]]
 
 
-def get_info(cookie_val):
-  request = urllib2.Request(GETINFO_ENDPOINT)
-  request.add_header('Cookie', 'ACSID=%s' % cookie_val)
+def GetInfo(application_auth):
+  """Attempts to get subscription info for the authenticated user via the API.
+
+  If the cookie value is not valid or the server can't be reached, an
+  error message is returned to be printed by the caller.
+
+  In the case of success, the API returns a JSON tuple (calendars, frequency)
+  where calendars is a list of calendar subscriptions and frequency is the
+  the human readable version of the frequency.
+
+  Args:
+    application_auth: the ACSID cookie specific to the application and the user
+
+  Returns:
+    A list of lines or a string instance to be passed to PrintMessageList or
+        TerminateWithMessage to alert the user of failure or success
+
+  Raises:
+    APIUseException: in the case that the request times out, the API returns an
+        error in ERROR_RESPONSES or the response is not a list of length 2
+        with first value a list as well
+  """
+  request = urllib2.Request(GETINFO_ENDPOINT)  # pylint:disable-msg=E0602
+  request.add_header('Cookie', 'ACSID=%s' % application_auth)
 
   try:
-    add_subs_cnxn = urllib2.urlopen(request)
-    response_val = simplejson.loads(add_subs_cnxn.read())
+    add_subs_cnxn = urllib2.urlopen(request)  # pylint:disable-msg=E0602
+    response_val = simplejson.loads(  # pylint:disable-msg=E0602
+        add_subs_cnxn.read())
     add_subs_cnxn.close()
-  except urllib2.HTTPError:
-    return  ['Connection error.', '',
-             'Could not reach %s to get info.' % APP_ID]
-  except:
-    return 'An unexpected error occurred.'
+  except urllib2.HTTPError:  # pylint:disable-msg=E0602
+    raise APIUseException(['Connection error.', '',
+                           'Could not reach %s to get info.' % APP_ID])
 
-  if response_val == 'no_user:fail':
-    return 'No user was provided.'
-  elif response_val == 'no_cal:fail':
-    return 'You have no calendar to update.'
+  # Output may be a list, which is unhashable
+  if response_val in ERROR_RESPONSES['getinfo'].keys():
+    raise APIUseException(ERROR_RESPONSES['getinfo'][response_val])
 
-  # API returns tuple [<calendars>, <frequency>]
   if (type(response_val) != list or len(response_val) != 2 or
       type(response_val[0]) != list):
-    return 'An unexpected error occurred.'
+    raise APIUseException('An unexpected error occurred.')
 
   calendars, verbose_freq = response_val
   return ['Your subscriptions will be updated %s.' % verbose_freq,
           '', 'Your current subscriptions are:'] + calendars
 
 
-def make_request(action, payload):
-  if action.lower() not in ['add', 'frequency', 'getinfo']:
-    return ''
+def MakeRequest(args):
+  """Attempts to perform a requested action via the API.
 
-  success_auth, auth_val, result = get_auth_val()
-  if not success_auth or auth_val is None:
-    terminate_with_msg(result)
+  This is intended to be used with the results of parsed arguments (via
+  argparse). This will handle all authentication steps and will prompt
+  the user for email and password. Only the actions 'add', 'frequency' and
+  'getinfo' are accepted and mapped to the relevant subfunctions with the
+  relevant authentication cookie and payload data. If the action succeeds, a
+  response message from the relevant subfunction is returned.
 
-  success_cookie, auth_cookie, result = parse_auth_message(auth_val)
-  if not success_cookie or auth_cookie is None:
-    terminate_with_msg(result)
+  Args:
+    args: an ArgumentParser object.
 
-  valid, cookie_val, result = get_site_cookie(auth_cookie)
-  if not valid or cookie_val is None:
-    terminate_with_msg(result)
+  Returns:
+    A list of lines or a string instance to be passed to PrintMessageList or
+        TerminateWithMessage to alert the user of success
 
-  try:
-    if action.lower() == 'add':
-      response_val = add_subscription(cookie_val, payload)
-    elif action.lower() == 'frequency':
-      response_val = change_frequency(cookie_val, payload)
-    elif action.lower() == 'getinfo':
-      response_val = get_info(cookie_val)
-    else:
-      response_val = 'An unexpected error occurred.'
-  except SystemExit:
-    raise
-  except:
-    response_val = 'An unexpected error occurred.'
-  print_msg_list(response_val)
+  Raises:
+    APIUseException: when none of the predefined API actions have been
+        sent with the args
+  """
+  auth_manager = APIAuthManager(raw_input('Email address: '))
+  application_auth = auth_manager.GetApplicationAuth()
+
+  api_actions = [('add', AddSubscription, 'calendar-link'),
+                 ('chg', ChangeFrequency, 'frequency'),
+                 ('getinfo', GetInfo, None)]
+
+  for action, method, key in api_actions:
+    value = getattr(args, action, None)
+    if value is None:
+      continue
+
+    args = (application_auth,)
+    if key is not None:
+      args += ({key: value},)
+
+    return method(*args)
+
+  raise APIUseException('Request attempted without valid arguments.')
+
+
+def ImportOrFail(scope):
+  """Attempts to import the needed Python packages or fail with message.
+
+  Since a command line tool, this is included to give the users an informative
+  message that will allow them to get their environment configured correctly.
+  This will attempt to import each library in REQUIRED_LIBRARIES. If any fail,
+  an message describing how to install is returned.
+
+  Args:
+    scope: A scope dictionary (inteneded to be locals()) to add the imports to
+
+  Returns:
+    A tuple (success, msg_list) where
+      success: Boolean indicating whether all imports succeeded
+      msg_list: a list of strings to be printed by PrintMessageList in the case
+          of import failure
+  """
+  imports_needed = []
+  for library in REQUIRED_LIBRARIES:
+    try:
+      scope[library] = __import__(library)
+    except ImportError:
+      imports_needed.append(library)
+
+  if imports_needed:
+    msg_list = ['Failed to import necessary libraries.', '',
+                'To successfully use the %s command line tool,' % APP_ID,
+                'consider installing the missing libraries via:']
+
+    for library in imports_needed:
+      msg_list.append('sudo pip install %s' % library)
+
+    msg_list.extend(['', 'If you do not have pip installed, easy_install is a',
+                     'worthy replacement, but you should get pip though.',
+                     '', 'If you have neither, visit;',
+                     'http://www.pip-installer.org/en/latest/installing.html'])
+    return (False, msg_list)
+
+  return (True, None)
+
+
+def GetParser(app_id=APP_ID):
+  """Create arg parser specific to the API to allow script to be used in CLI.
+
+  Args:
+    app_id: application ID, with default as to the global value
+
+  Returns:
+    An argparse.ArgumentParser object with mappings to the subfunctions relevant
+        to the API as well as help text
+  """
+  parser = argparse.ArgumentParser(  # pylint:disable-msg=E0602
+      prog=app_id, description='Command Line Tool for persistent-cal')
+  subparsers = parser.add_subparsers(help='persistent-cal subcommands')
+
+  parser_add = subparsers.add_parser('add', help='Add subscription to calendar')
+  parser_add.add_argument(
+      'add', metavar='link', type=unicode,
+      help='external calendar link to add as a subscription')
+
+  parser_chg = subparsers.add_parser(
+      'chg', help='Change frequency of calendar updates')
+
+  parser_chg.add_argument(
+      'chg', metavar='freq', type=int,
+      help=('number of times per week that your personal '
+            'calendar will be synced with your subscribed calendars'))
+
+  parser_getinfo = subparsers.add_parser(
+      'getinfo', help='Get existing calendar info')
+  parser_getinfo.add_argument('getinfo', action='store_true')
+
+  return parser
 
 
 if __name__ == '__main__':
-  args = PARSER.parse_args()
-  add_val = getattr(args, 'add', '')
-  frequency_val = getattr(args, 'chg', -1)
-  getinfo = getattr(args, 'getinfo', False)
+  parent_scope = locals()
+  success, msg_list = ImportOrFail(parent_scope)
+  if not success:
+    TerminateWithMessage(msg_list)
 
-  if add_val != '':
-    action = 'add'
-    payload = {'calendar-link': add_val}
-  elif frequency_val != -1:
-    action = 'frequency'
-    payload = {'frequency': frequency_val}
-  elif getinfo:
-    action = 'getinfo'
-    payload = {}
-  else:
-    sys.exit(1)
+  args = GetParser().parse_args()
 
   try:
-    make_request(action, payload)
+    result = MakeRequest(args)
+    PrintMessageList(result)
+  except (AuthException, APIUseException) as exc:
+    exception_args = exc.args
+    if len(exception_args) != 1:
+      raise
+
+    msg_list = exception_args[0]
+    if not (isinstance(msg_list, str) or isinstance(msg_list, list)):
+      raise
+
+    PrintMessageList(msg_list)
   except KeyboardInterrupt:
     print '\n\n',
-    print_msg_list(['Sorry I couldn\'t be more helpful.',
-                    'That hurts when you cancel me!'])
+    PrintMessageList(['Sorry I couldn\'t be more helpful.',
+                      'That hurts when you cancel me!'])
