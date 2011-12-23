@@ -213,7 +213,8 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
+def AddOrUpdateEvent(event_data, gcal, email=None,
+                     event=None, push_update=True):
   """Create event in main application calendar and add user as attendee."""
   update = (event is not None)
   if not update:
@@ -247,7 +248,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
     return event if attempts else None
   else:
     # Who
-    who_add = gdata.calendar.data.EventWho(email=event_data['email'])
+    who_add = gdata.calendar.data.EventWho(email=email)
     event.who.append(who_add)
 
     attempts = 3
@@ -378,7 +379,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
           cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
           # Filter out this user
           cal_event.who = [who_entry for who_entry in cal_event.who
-                           if who_entry.email != event_data['email']]
+                           if who_entry.email != user_cal.owner.email()]
           gcal.Update(cal_event)
           event.put()
     user_cal.upcoming = list(set(upcoming))
@@ -477,7 +478,8 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
       if event is None:
         # Create new event
         # (leaving out the event argument creates a new event)
-        cal_event = AddOrUpdateEvent(event_data, gcal)
+        cal_event = AddOrUpdateEvent(event_data, gcal,
+                                     email=current_user.email())
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           yield (uid, False, True)
