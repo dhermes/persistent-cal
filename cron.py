@@ -66,9 +66,7 @@ class MainHandler(ExtendedHandler):
 
     # 1st of the month, 8 intervals per day
     if now.day == 1 and now_interval % 8 == 0:
-      if GCAL is None:
-        GCAL = InitGCAL()
-      MonthlyCleanup(now.date(), GCAL, defer_now=True)
+      MonthlyCleanup(now.date(), defer_now=True)
 
 
 application = WSGIApplication([

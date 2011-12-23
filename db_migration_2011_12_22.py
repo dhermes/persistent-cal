@@ -56,8 +56,7 @@ from models import Event
 
 
 def StringToDayString(time_as_str):
-  """Takes time as string and returns a datetime object."""
-  # Default TZ is UTC/GMT
+  """Takes time as string (date or datetime) and returns date as string."""
   time_parse = '%Y-%m-%d'
   try:
     converted_val = datetime.datetime.strptime(time_as_str, time_parse)

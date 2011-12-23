@@ -157,6 +157,24 @@ def TimeToDTStamp(time_as_str):
     pass
 
 
+def StringToDayString(time_as_str):
+  """Takes time as string (date or datetime) and returns date as string."""
+  time_parse = '%Y-%m-%d'
+  try:
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
+    return time_as_str
+  except ValueError:
+    pass
+
+  time_parse += 'T%H:%M:%S.000Z'
+  try:
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
+    converted_val = converted_val.date()
+    return converted_val.strftime('%Y-%m-%d')
+  except ValueError:
+    pass
+
+
 def RemoveTimezone(time_value):
   """Takes a datetime object and removes the timezone."""
   if isinstance(time_value, datetime.datetime):
@@ -275,7 +293,7 @@ def ParseEvent(event):
   return uid, event_data
 
 
-def MonthlyCleanup(relative_date, gcal, defer_now=False):
+def MonthlyCleanup(relative_date, defer_now=False):
   """Deletes events older than three months.
 
   Will delete events from the datastore that are older than three months. First
@@ -290,13 +308,12 @@ def MonthlyCleanup(relative_date, gcal, defer_now=False):
 
   Args:
     relative_date: date provided by calling script. Expected to be current date
-    gcal: a CalendarClient instance
     defer_now: flag to determine whether or not a task should be spawned
   """
   logging.info('%s called with: %s', 'MonthlyCleanup', locals())
 
   if defer_now:
-    defer(MonthlyCleanup, relative_date, gcal, defer_now=False, _url='/workers')
+    defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
     return
 
   prior_date_day = relative_date.day
@@ -325,7 +342,8 @@ def MonthlyCleanup(relative_date, gcal, defer_now=False):
   for event in old_events:
     # TODO(dhermes) Consider also deleting from main calendar
     # gcal.delete(event.gcal_edit, force=True)
-    # logging.info('%s deleted', event.gcal_edit)
+    logging.info('%s removed from datastore. %s remains in calendar.',
+                 event, event.gcal_edit)
     event.delete()
 
 
@@ -466,9 +484,11 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           continue
 
         gcal_edit = cal_event.get_edit_link().href
+        end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
+                      end_date=end_date,
                       gcal_edit=gcal_edit)
         event.put()
 
