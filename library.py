@@ -275,6 +275,60 @@ def ParseEvent(event):
   return uid, event_data
 
 
+def MonthlyCleanup(relative_date, gcal, defer_now=False):
+  """Deletes events older than three months.
+
+  Will delete events from the datastore that are older than three months. First
+  checks that the date provided is at most two days prior to the current one.
+
+  Note: This would seem to argue that relative_date should not be provided, but
+  we want to use the relative_date from the server that is executing the cron
+  job, not the one executing the cleanup (as there may be some small
+  differences). In the that relative_date does not pass this check, we log and
+  send and email to the admins, but do not raise an error. This is done so
+  this can be removed from the task queue in the case of the invalid input.
+
+  Args:
+    relative_date: date provided by calling script. Expected to be current date
+    gcal: a CalendarClient instance
+    defer_now: flag to determine whether or not a task should be spawned
+  """
+  logging.info('%s called with: %s', 'MonthlyCleanup', locals())
+
+  if defer_now:
+    defer(MonthlyCleanup, relative_date, gcal, defer_now=False, _url='/workers')
+    return
+
+  prior_date_day = relative_date.day
+
+  prior_date_month = relative_date.month - 3
+  if prior_date_month < 1:
+    prior_date_year = relative_date.year - 1
+    prior_date_month += 12
+  else:
+    prior_date_year = relative_date.year
+
+  prior_date = datetime.date(year=prior_date_year,
+                             month=prior_date_month,
+                             day=prior_date_day)
+
+  today = datetime.date.today()
+  if today - prior_date > datetime.timedelta(days=2):
+    msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
+                                                             today)
+    logging.info(msg)
+    email_admins(msg, defer_now=True)
+    return
+
+  prior_date_as_str = FormatTime(prior_date)
+  old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
+  for event in old_events:
+    # TODO(dhermes) Consider also deleting from main calendar
+    # gcal.delete(event.gcal_edit, force=True)
+    # logging.info('%s deleted', event.gcal_edit)
+    event.delete()
+
+
 def UpdateUpcoming(user_cal, upcoming, gcal):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 

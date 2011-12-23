@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""DB migration for Model Update on 12-22-2011.
+"""DB migration for Model Update on 2011-12-22.
 
 Intended to be run through the remote API:
 
@@ -23,7 +23,7 @@ remote_api_shell.py -s persistent-cal.appspot.com
 
 s~persistent-cal> import sys
 s~persistent-cal> sys.path.append('/path/to/persistent-cal')
-s~persistent-cal> from db_migration_12_22_2011 import UpdateEvents
+s~persistent-cal> from db_migration_2011_12_22 import UpdateEvents
 s~persistent-cal> UpdateEvents()
 
 Note:
