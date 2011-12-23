@@ -405,7 +405,6 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
       if event is None:
         # Create new event
         # (leaving out the event argument creates a new event)
-        event_data['email'] = current_user.email()
         cal_event = AddOrUpdateEvent(event_data, gcal)
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
