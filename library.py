@@ -331,7 +331,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
                              day=prior_date_day)
 
   today = datetime.date.today()
-  if today - prior_date > datetime.timedelta(days=2):
+  if today - relative_date > datetime.timedelta(days=2):
     msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
                                                              today)
     logging.info(msg)
