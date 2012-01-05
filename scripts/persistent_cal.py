@@ -580,11 +580,12 @@ def main():
                       'That hurts when you cancel me!'])
 
 
-if __name__ == '__main__':
-  parent_scope = locals()
-  success, msg_list = ImportOrFail(parent_scope)
-  if not success:
-    PrintMessageList(msg_list)
-    sys.exit(1)
+parent_scope = locals()
+success, msg_list = ImportOrFail(parent_scope)
+if not success:
+  PrintMessageList(msg_list)
+  sys.exit(1)
 
+
+if __name__ == '__main__':
   main()
