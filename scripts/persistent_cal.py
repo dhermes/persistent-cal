@@ -23,6 +23,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 import sys
 
+
 # Constants
 APP_ID = 'persistent-cal'
 ADD_ENDPOINT = 'http://%s.appspot.com/add' % APP_ID
@@ -63,11 +64,20 @@ ERROR_RESPONSES = {
                 'no_cal:fail': 'You have never used %s.' % APP_ID}}
 
 
-class AuthException(Exception):
+class MessageException(Exception):
+  """Base exception for holding a printable message."""
+  message = None
+
+  def __init__(self, message, *args, **kwargs):
+    super(MessageException, self).__init__(*args, **kwargs)
+    self.message = message
+
+
+class AuthException(MessageException):
   """Thrown when an authentication error occurs."""
 
 
-class APIUseException(Exception):
+class APIUseException(MessageException):
   """Thrown when the API is used incorrectly or returns an error."""
 
 
@@ -113,7 +123,7 @@ class APIAuthManager(object):
 
     Returns:
       auth_response: The body of the client login response if successful,
-        else None
+          else None
 
     Raises:
       AuthException: in the case that the auth_response is not set
@@ -127,12 +137,13 @@ class APIAuthManager(object):
 
     auth_response = None
     try:
-      auth_cnxn = urllib.urlopen(  # pylint:disable-msg=E0602
+      auth_cnxn = urllib2.urlopen(  # pylint:disable-msg=E0602
           client_login, params)
       auth_response = auth_cnxn.read()
       auth_cnxn.close()
-    except IOError:
-      pass
+    except urllib2.HTTPError as exc:  # pylint:disable-msg=E0602
+      if exc.code in (401, 403):
+        auth_response = exc.read()
 
     if auth_response is None:
       raise AuthException('Could not connect to Google.')
@@ -149,6 +160,9 @@ class APIAuthManager(object):
     authentication activated, we expect 'Info=InvalidSecondFactor' to
     be in the response as well
 
+    In the case that the method is called after login has completed, we
+    reset all auth values and rely on the method to reset the client auth.
+
     Args:
       client_login: the url used to make client login requests, defaults to the
           global value CLIENT_LOGIN
@@ -161,6 +175,9 @@ class APIAuthManager(object):
       AuthException: in the case that _GetClientAuthResponse returns None, the
           response contains BadAuthentication or is an unexpected format.
     """
+    self.client_auth = None
+    self.application_auth = None
+
     password = getpass.getpass('Password: ')  # pylint:disable-msg=E0602
     auth_response = self._GetClientAuthResponse(password, client_login)
 
@@ -191,6 +208,9 @@ class APIAuthManager(object):
     authenticate with the application and then keep the application specific
     cookie for later use.
 
+    In the case that the method is called after login has completed, we
+    reset the application auth value and rely on the method to reset it.
+
     Args:
       request_url: application specific url to request a cookie given a
           client auth token has been obtained. In default case, is set to None,
@@ -208,6 +228,7 @@ class APIAuthManager(object):
       AuthException: in the case that GetClientAuth raises it, the inital
           request fails, or no ACSID= cookie is returned
     """
+    self.application_auth = None
     if self.state < 2:
       self.GetClientAuth(client_login)
 
@@ -258,23 +279,7 @@ def PrintMessageList(msg_list):
   print '\n'.join(result)
 
 
-def TerminateWithMessage(msg_list):
-  """Print a failure/success message and raise SystemExit with value 1.
-
-  In the case of an extreme failure, this allows an error message to be
-  printed and the calling function to exit the script.
-
-  Args:
-    msg_list: A string or a list of strings to be printed with PrintMessageList
-
-  Raises:
-    SystemExit: with exit code 1
-  """
-  PrintMessageList(msg_list)
-  sys.exit(1)
-
-
-def AddSubscription(application_auth, payload):
+def AddSubscription(application_auth, payload, add_endpoint=ADD_ENDPOINT):
   """Attempts to add a calendar link for the authenticated user via the API.
 
   If the payload dictionary  does not contain the key 'calendar-link', we return
@@ -287,10 +292,12 @@ def AddSubscription(application_auth, payload):
     payload: a dictionary corresponding to the necessary data to make an API
         request. For this function, we expect the key 'calendar-link' and the
         value we expect to be any string.
+    add_endpoint: The API endpoint for making add requests. By default this is
+        set to the global ADD_ENDPOINT.
 
   Returns:
-    A list of lines or a string instance to be passed to PrintMessageList or
-        TerminateWithMessage to alert the user of failure or success
+    A list of lines or a string instance to be passed to PrintMessageList to
+        alert the user of failure or success
 
   Raises:
     APIUseException: in the case that no link is in the http payload, the
@@ -302,7 +309,7 @@ def AddSubscription(application_auth, payload):
     raise APIUseException(['Unexpected behavior: library error.', '',
                            'No calendar link was specified in the payload.'])
 
-  request = urllib2.Request(ADD_ENDPOINT)  # pylint:disable-msg=E0602
+  request = urllib2.Request(add_endpoint)  # pylint:disable-msg=E0602
   request.add_header('Cookie', 'ACSID=%s' % application_auth)
   params = urllib.urlencode(  # pylint:disable-msg=E0602
       {'calendar-link': calendar_link})
@@ -327,7 +334,7 @@ def AddSubscription(application_auth, payload):
   return ['Success!', '', 'Your current subscriptions are:'] + response_val
 
 
-def ChangeFrequency(application_auth, payload):
+def ChangeFrequency(application_auth, payload, freq_endpoint=FREQ_ENDPOINT):
   """Attempts to change the frequency for the authenticated user via the API.
 
   If the payload dictionary  does not contain the key 'frequency', we return an
@@ -345,10 +352,12 @@ def ChangeFrequency(application_auth, payload):
     payload: a dictionary corresponding to the necessary data to make an API
         request. For this function, we expect the key 'frequency' and the value
         we expect to be a key in the constant FREQUENCY_MAP.
+    freq_endpoint: The API endpoint for making frequency change requests. By
+        default this is set to the global FREQ_ENDPOINT.
 
   Returns:
-    A list of lines or a string instance to be passed to PrintMessageList or
-        TerminateWithMessage to alert the user of failure or success
+    A list of lines or a string instance to be passed to PrintMessageList to
+        alert the user of failure or success
 
   Raises:
     APIUseException: in the case that frequency is not in the http payload, the
@@ -363,7 +372,7 @@ def ChangeFrequency(application_auth, payload):
   if frequency in FREQUENCY_MAP:
     frequency = FREQUENCY_MAP[frequency]
 
-  request = urllib2.Request(FREQ_ENDPOINT)  # pylint:disable-msg=E0602
+  request = urllib2.Request(freq_endpoint)  # pylint:disable-msg=E0602
   request.add_header('Cookie', 'ACSID=%s' % application_auth)
   request.get_method = lambda: 'PUT'
   params = urllib.urlencode(  # pylint:disable-msg=E0602
@@ -391,7 +400,7 @@ def ChangeFrequency(application_auth, payload):
           'Your subscriptions will be updated %s.' % response_val[0]]
 
 
-def GetInfo(application_auth):
+def GetInfo(application_auth, getinfo_endpoint=GETINFO_ENDPOINT):
   """Attempts to get subscription info for the authenticated user via the API.
 
   If the cookie value is not valid or the server can't be reached, an
@@ -403,17 +412,19 @@ def GetInfo(application_auth):
 
   Args:
     application_auth: the ACSID cookie specific to the application and the user
+    getinfo_endpoint: The API endpoint for making information requests. By
+        default this is set to the global FREQ_ENDPOINT.
 
   Returns:
-    A list of lines or a string instance to be passed to PrintMessageList or
-        TerminateWithMessage to alert the user of failure or success
+    A list of lines or a string instance to be passed to PrintMessageList to
+        alert the user of failure or success
 
   Raises:
     APIUseException: in the case that the request times out, the API returns an
         error in ERROR_RESPONSES or the response is not a list of length 2
         with first value a list as well
   """
-  request = urllib2.Request(GETINFO_ENDPOINT)  # pylint:disable-msg=E0602
+  request = urllib2.Request(getinfo_endpoint)  # pylint:disable-msg=E0602
   request.add_header('Cookie', 'ACSID=%s' % application_auth)
 
   try:
@@ -438,7 +449,7 @@ def GetInfo(application_auth):
           '', 'Your current subscriptions are:'] + calendars
 
 
-def MakeRequest(args):
+def MakeRequest(parsed_args):
   """Attempts to perform a requested action via the API.
 
   This is intended to be used with the results of parsed arguments (via
@@ -449,15 +460,15 @@ def MakeRequest(args):
   response message from the relevant subfunction is returned.
 
   Args:
-    args: an ArgumentParser object.
+    parsed_args: an ArgumentParser object.
 
   Returns:
-    A list of lines or a string instance to be passed to PrintMessageList or
-        TerminateWithMessage to alert the user of success
+    A list of lines or a string instance to be passed to PrintMessageList to
+        alert the user of success
 
   Raises:
     APIUseException: when none of the predefined API actions have been
-        sent with the args
+        sent with the parsed args
   """
   auth_manager = APIAuthManager(raw_input('Email address: '))
   application_auth = auth_manager.GetApplicationAuth()
@@ -466,30 +477,30 @@ def MakeRequest(args):
                  ('chg', ChangeFrequency, 'frequency'),
                  ('getinfo', GetInfo, None)]
 
-  for action, method, key in api_actions:
-    value = getattr(args, action, None)
+  for action, method, attr in api_actions:
+    value = getattr(parsed_args, action, None)
     if value is None:
       continue
 
-    args = (application_auth,)
-    if key is not None:
-      args += ({key: value},)
+    method_args = (application_auth,)
+    if attr is not None:
+      method_args += ({attr: value},)
 
-    return method(*args)
+    return method(*method_args)
 
   raise APIUseException('Request attempted without valid arguments.')
 
 
-def ImportOrFail(scope):
+def ImportOrFail(scope=locals()):
   """Attempts to import the needed Python packages or fail with message.
 
   Since a command line tool, this is included to give the users an informative
   message that will allow them to get their environment configured correctly.
   This will attempt to import each library in REQUIRED_LIBRARIES. If any fail,
-  an message describing how to install is returned.
+  a message describing how to install is returned.
 
   Args:
-    scope: A scope dictionary (inteneded to be locals()) to add the imports to
+    scope: A scope dictionary (intended to be locals()) to add the imports to
 
   Returns:
     A tuple (success, msg_list) where
@@ -555,28 +566,25 @@ def GetParser(app_id=APP_ID):
   return parser
 
 
-if __name__ == '__main__':
-  parent_scope = locals()
-  success, msg_list = ImportOrFail(parent_scope)
-  if not success:
-    TerminateWithMessage(msg_list)
-
+def main():
   args = GetParser().parse_args()
 
   try:
     result = MakeRequest(args)
     PrintMessageList(result)
   except (AuthException, APIUseException) as exc:
-    exception_args = exc.args
-    if len(exception_args) != 1:
-      raise
-
-    msg_list = exception_args[0]
-    if not (isinstance(msg_list, str) or isinstance(msg_list, list)):
-      raise
-
-    PrintMessageList(msg_list)
+    PrintMessageList(exc.message)
   except KeyboardInterrupt:
     print '\n\n',
     PrintMessageList(['Sorry I couldn\'t be more helpful.',
                       'That hurts when you cancel me!'])
+
+
+if __name__ == '__main__':
+  parent_scope = locals()
+  success, msg_list = ImportOrFail(parent_scope)
+  if not success:
+    PrintMessageList(msg_list)
+    sys.exit(1)
+
+  main()
