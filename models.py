@@ -28,6 +28,7 @@ class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as simplejson
+  end_date = db.StringProperty(required=True)
   gcal_edit = db.StringProperty(required=True)
 
   def __repr__(self):

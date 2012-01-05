@@ -3,4 +3,3 @@
 -Switch to v3 of calendar API
 -Wrap up/address all TODO comments
 -Pass generator on DeadlineExceed rather than using start_uid to bookmark
--/_ah/queue/deferred should email to admin on failure as well (wrap handler)

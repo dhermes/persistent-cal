@@ -157,6 +157,24 @@ def TimeToDTStamp(time_as_str):
     pass
 
 
+def StringToDayString(time_as_str):
+  """Takes time as string (date or datetime) and returns date as string."""
+  time_parse = '%Y-%m-%d'
+  try:
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
+    return time_as_str
+  except ValueError:
+    pass
+
+  time_parse += 'T%H:%M:%S.000Z'
+  try:
+    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
+    converted_val = converted_val.date()
+    return converted_val.strftime('%Y-%m-%d')
+  except ValueError:
+    pass
+
+
 def RemoveTimezone(time_value):
   """Takes a datetime object and removes the timezone."""
   if isinstance(time_value, datetime.datetime):
@@ -195,7 +213,8 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
+def AddOrUpdateEvent(event_data, gcal, email=None,
+                     event=None, push_update=True):
   """Create event in main application calendar and add user as attendee."""
   update = (event is not None)
   if not update:
@@ -229,7 +248,7 @@ def AddOrUpdateEvent(event_data, gcal, event=None, push_update=True):
     return event if attempts else None
   else:
     # Who
-    who_add = gdata.calendar.data.EventWho(email=event_data['email'])
+    who_add = gdata.calendar.data.EventWho(email=email)
     event.who.append(who_add)
 
     attempts = 3
@@ -275,6 +294,60 @@ def ParseEvent(event):
   return uid, event_data
 
 
+def MonthlyCleanup(relative_date, defer_now=False):
+  """Deletes events older than three months.
+
+  Will delete events from the datastore that are older than three months. First
+  checks that the date provided is at most two days prior to the current one.
+
+  Note: This would seem to argue that relative_date should not be provided, but
+  we want to use the relative_date from the server that is executing the cron
+  job, not the one executing the cleanup (as there may be some small
+  differences). In the that relative_date does not pass this check, we log and
+  send and email to the admins, but do not raise an error. This is done so
+  this can be removed from the task queue in the case of the invalid input.
+
+  Args:
+    relative_date: date provided by calling script. Expected to be current date
+    defer_now: flag to determine whether or not a task should be spawned
+  """
+  logging.info('%s called with: %s', 'MonthlyCleanup', locals())
+
+  if defer_now:
+    defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
+    return
+
+  prior_date_day = relative_date.day
+
+  prior_date_month = relative_date.month - 3
+  if prior_date_month < 1:
+    prior_date_year = relative_date.year - 1
+    prior_date_month += 12
+  else:
+    prior_date_year = relative_date.year
+
+  prior_date = datetime.date(year=prior_date_year,
+                             month=prior_date_month,
+                             day=prior_date_day)
+
+  today = datetime.date.today()
+  if today - relative_date > datetime.timedelta(days=2):
+    msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
+                                                             today)
+    logging.info(msg)
+    email_admins(msg, defer_now=True)
+    return
+
+  prior_date_as_str = FormatTime(prior_date)
+  old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
+  for event in old_events:
+    # TODO(dhermes) Consider also deleting from main calendar
+    # gcal.delete(event.gcal_edit, force=True)
+    logging.info('%s removed from datastore. %s remains in calendar.',
+                 event, event.gcal_edit)
+    event.delete()
+
+
 def UpdateUpcoming(user_cal, upcoming, gcal):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
@@ -306,7 +379,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
           cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
           # Filter out this user
           cal_event.who = [who_entry for who_entry in cal_event.who
-                           if who_entry.email != event_data['email']]
+                           if who_entry.email != user_cal.owner.email()]
           gcal.Update(cal_event)
           event.put()
     user_cal.upcoming = list(set(upcoming))
@@ -405,17 +478,19 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
       if event is None:
         # Create new event
         # (leaving out the event argument creates a new event)
-        event_data['email'] = current_user.email()
-        cal_event = AddOrUpdateEvent(event_data, gcal)
+        cal_event = AddOrUpdateEvent(event_data, gcal,
+                                     email=current_user.email())
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           yield (uid, False, True)
           continue
 
         gcal_edit = cal_event.get_edit_link().href
+        end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
+                      end_date=end_date,
                       gcal_edit=gcal_edit)
         event.put()
 
