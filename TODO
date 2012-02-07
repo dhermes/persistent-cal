@@ -3,3 +3,5 @@
 -Switch to v3 of calendar API
 -Wrap up/address all TODO comments
 -Pass generator on DeadlineExceed rather than using start_uid to bookmark
+-Add option to either use OAuth2 for personal cal or be integrated with main cal
+-Notify on new users

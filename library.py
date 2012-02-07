@@ -30,7 +30,6 @@ import simplejson
 import sys
 from time import sleep
 import traceback
-from types import FunctionType as function
 from urllib2 import urlopen
 
 # Third-party libraries
@@ -46,7 +45,6 @@ from google.appengine.api import mail
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
-from google.appengine.ext.deferred import run
 from google.appengine.ext.webapp import RequestHandler
 from google.appengine.ext.webapp import template
 from google.appengine.runtime import DeadlineExceededError
@@ -584,6 +582,14 @@ def deadline_decorator(method):
   """Decorator for HTTP verbs to handle GAE timeout."""
 
   def wrapped_method(self, *args, **kwargs):
+    """Returned function that uses method from outside scope.
+
+    Tries to execute the method with the arguments. If either
+    a PermanentTaskFailure is thrown (from deferred library) or if
+    DeadlineExceededError is thrown (inherits directly from
+    BaseException) administrators are emailed and then cleanup
+    occurs.
+    """
     try:
       method(self, *args, **kwargs)
     except PermanentTaskFailure:
@@ -604,10 +610,17 @@ def deadline_decorator(method):
   return wrapped_method
 
 
-class DecorateHttpVerbsMetaclass(type):
-  """Metaclass to decorate all HTTP verbs with a special method."""
+class ExtendedHandler(RequestHandler):
+  """A custom version of GAE RequestHandler.
 
-  def __new__(cls, name, parents, cls_attr):
+  This subclass of RequestHandler defines a handle_exception
+  function that will email administrators when an exception
+  occurs. In addition, the __new__ method is overridden
+  to allow custom wrappers to be placed around the HTTP verbs
+  before an instance is created.
+  """
+
+  def __new__(cls, *args, **kwargs):
     """Constructs the object.
 
     This is explicitly intended for Google App Engine's RequestHandler.
@@ -615,26 +628,22 @@ class DecorateHttpVerbsMetaclass(type):
     decorate: get, post, put and delete. The other three supported
     (head, options, trace) may be added at a later time.
     Args:
-      name:
-      parents:
-      cls_attr:
+      cls: A reference to the class
 
     Reference: ('http://code.google.com/appengine/docs/python/tools/'
                 'webapp/requesthandlerclass.html')
     """
     verbs = ['get', 'post', 'put', 'delete']
+
     for verb in verbs:
-      if verb in cls_attr and isinstance(cls_attr[verb], function):
-        cls_attr[verb] = deadline_decorator(cls_attr[verb])
+      method = getattr(cls, verb, None)
+      if callable(method):
+        setattr(cls, verb, deadline_decorator(method))
 
-    return super(DecorateHttpVerbsMetaclass, cls).__new__(cls, name,
-                                                          parents, cls_attr)
-
-
-class ExtendedHandler(RequestHandler):
-  __metaclass__ = DecorateHttpVerbsMetaclass
+    return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
 
   def handle_exception(self, exception, debug_mode):
+    """Custom handler for all GAE errors that inherit from Exception."""
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
     logging.exception(traceback_info)
     email_admins(traceback_info, defer_now=True)
@@ -642,30 +651,3 @@ class ExtendedHandler(RequestHandler):
     self.response.clear()
     self.response.set_status(500)
     self.response.out.write(RENDERED_500_PAGE)
-
-
-# TODO(dhermes) make proposed change to AppEngine by calling super().post
-class TaskHandler(RequestHandler):
-  """A {borrowed} webapp handler class that processes deferred invocations."""
-
-  def post(self):
-    """Handles task queue POST requests."""
-    if 'X-AppEngine-TaskName' not in self.request.headers:
-      logging.critical('Detected an attempted XSRF attack. The header '
-                       '"X-AppEngine-Taskname" was not set.')
-      self.response.set_status(403)
-      return
-
-    in_prod = (
-        not self.request.environ.get('SERVER_SOFTWARE').startswith('Devel'))
-    if in_prod and self.request.environ.get('REMOTE_ADDR') != '0.1.0.2':
-      logging.critical('Detected an attempted XSRF attack. This request did '
-                       'not originate from Task Queue.')
-      self.response.set_status(403)
-      return
-
-    headers = ['%s:%s' % (k, v) for k, v in self.request.headers.items()
-               if k.lower().startswith('x-appengine-')]
-    logging.info(', '.join(headers))
-
-    run(self.request.body)

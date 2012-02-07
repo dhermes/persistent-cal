@@ -30,6 +30,7 @@ import simplejson
 
 # App engine specific libraries
 from google.appengine.api import users
+from google.appengine.ext.deferred import TaskHandler
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
 from google.appengine.ext.webapp.util import run_wsgi_app
@@ -39,7 +40,6 @@ from google.appengine.ext.webapp import WSGIApplication
 from library import ConvertToInterval
 from library import ExtendedHandler
 from library import InitGCAL
-from library import TaskHandler
 from library import UpdateString
 from library import UpdateUserSubscriptions
 from library import WhiteList
@@ -240,8 +240,17 @@ class GetInfoHandler(ExtendedHandler):
     self.response.out.write(user_info)
 
 
-class DeferredHandler(ExtendedHandler, TaskHandler):
-  pass
+class DeferredHandler(TaskHandler, ExtendedHandler):
+  """A webapp handler class that processes deferred invocations."""
+
+  def post(self):
+    """Custom post handler for deferred queue.
+
+    Uses the run_from_request method from deferred.TaskHandler to attempt to run
+    a deferred job. Uses the post wrapper defined in ExtendedHandler to handle
+    any errors that may occur in run_from_request.
+    """
+    self.run_from_request()
 
 
 class OwnershipVerifyHandler(ExtendedHandler):
