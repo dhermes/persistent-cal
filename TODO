@@ -1,7 +1,6 @@
--Take out personal date from commit history:
+-Take out personal data from commit history:
  http://stackoverflow.com/questions/179123/how-do-i-edit-an-incorrect-commit-message-in-git
 -Switch to v3 of calendar API
 -Wrap up/address all TODO comments
--Pass generator on DeadlineExceed rather than using start_uid to bookmark
 -Add option to either use OAuth2 for personal cal or be integrated with main cal
 -Notify on new users

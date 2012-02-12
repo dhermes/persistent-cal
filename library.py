@@ -363,19 +363,23 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     now = datetime.datetime.utcnow()
     for uid in set(user_cal.upcoming).difference(upcoming):
       event = Event.get_by_key_name(uid)
+      # pylint:disable-msg=E1103
       event_data = simplejson.loads(event.event_data)
       if TimeToDTStamp(event_data['when:to']) > now:
-        event.who.remove(user_cal.owner.user_id())
-        if not event.who:
-          gcal.delete(event.gcal_edit, force=True)
+        event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
+        if not event.who:  # pylint:disable-msg=E1103
+          gcal.delete(event.gcal_edit, force=True)  # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1103
           logging.info('%s deleted', event.gcal_edit)
-          event.delete()
+          event.delete()  # pylint:disable-msg=E1103
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
+          # pylint:disable-msg=E1103
           cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
           # Filter out this user
+          # pylint:disable-msg=E1103
           cal_event.who = [who_entry for who_entry in cal_event.who
                            if who_entry.email != user_cal.owner.email()]
           gcal.Update(cal_event)
@@ -384,29 +388,34 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     user_cal.put()
 
 
-def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None,
-                            defer_now=False, start=None):
+def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
+                            last_used_uid=None, defer_now=False):
   """Updates a list of calendars for a user, with a call to self on timeout."""
   logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
-  upcoming = [] if upcoming is None else upcoming
-  start = {} if start is None else start
 
   if defer_now:
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
-          upcoming=upcoming, defer_now=False, start=start, _url='/workers')
+          upcoming=upcoming, link_index=link_index,
+          last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
 
-  # Set variables to pick up where the loop left off in case of DLExcError
+  if link_index > 0:
+    links = links[link_index:]
+  upcoming = [] if upcoming is None else upcoming
+
+  # Set default values for link index and last used uid variables. These
+  # are used to to pick up where the loop left off in case the task encounters
+  # a DeadlineExceededError.
   index = 0
   uid = None
 
   try:
     for index, link in enumerate(links):
-      # In the case a uid is not None, we are picking up in the middle
-      # if the feed for the first link
-      if index == 0 and link == start.get('link', '') and 'uid' in start:
+      # In the case last_used_uid is not None, we may be picking up in the
+      # middle of the feed for the first link in {links}
+      if index == 0 and last_used_uid is not None:
         uid_generator = UpdateSubscription(link, user_cal.owner,
-                                           gcal, start_uid=start['uid'])
+                                           gcal, start_uid=last_used_uid)
       else:
         uid_generator = UpdateSubscription(link, user_cal.owner, gcal)
 
@@ -418,12 +427,10 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None,
           email_admins('silently failed operation on %s from %s' % (uid, link),
                        defer_now=True)
   except DeadlineExceededError:
-    # update links to account for progress
-    # upcoming is also updated along the way
-    links = links[index:]
-    start = {'uid': uid, 'link': links[0]}
+    # NOTE: upcoming has possibly been updated inside the try statement
     defer(UpdateUserSubscriptions, links, user_cal, gcal,
-          upcoming=upcoming, defer_now=defer_now, start=start, _url='/workers')
+          upcoming=upcoming, link_index=index, last_used_uid=uid,
+          defer_now=defer_now, _url='/workers')
     return
 
   # If the loop completes without timing out
@@ -436,10 +443,11 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
   Returns a generator instance which yields (uid, bool) tuples where bool
   is true if the event at uid is upcoming
+
   Args:
-    link:
-    current_user:
-    gcal:
+    link: Link to calendar feed being subscribed to
+    current_user: a User instance corresponding to the user that is updating
+    gcal: a CalendarClient instance used to make updates to GCal
     start_uid:
   """
   logging.info('%s called with: %s', 'UpdateSubscription', locals())
@@ -460,11 +468,12 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
   start_index = 0
   if start_uid is not None:
+    # pylint:disable-msg=E1103
     uid_list = [component.get('uid', '') for component in ical.walk()]
     if uid_list.count(start_uid) > 0:
       start_index = uid_list.index(start_uid)
 
-  for component in ical.walk()[start_index:]:
+  for component in ical.walk()[start_index:]:  # pylint:disable-msg=E1103
     if component.name != 'VEVENT':
       msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
       logging.info(msg)
@@ -504,7 +513,9 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           cal_event = None
           while attempts:
             try:
+              # pylint:disable-msg=E1103
               cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+              # pylint:disable-msg=E1103
               logging.info('GET sent to %s', event.gcal_edit)
               break
             except RedirectError:
@@ -517,7 +528,8 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
             continue
 
           # Update who
-          if current_user_id not in event.who:
+          if current_user_id not in event.who:  # pylint:disable-msg=E1103
+            # pylint:disable-msg=E1103
             event.who.append(current_user_id)  # id is string
 
             # add existing event to current_user's calendar
@@ -525,6 +537,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
             cal_event.who.append(who_add)
 
           # Update existing event
+          # pylint:disable-msg=E1103
           if db.Text(JsonAscii(event_data)) != event.event_data:
             event.event_data = db.Text(JsonAscii(event_data))
 
@@ -543,7 +556,7 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
               logging.info('%s updated', cal_event.get_edit_link().href)
 
               # After all possible changes to the Event instance have occurred
-              event.put()
+              event.put()  # pylint:disable-msg=E1103
               break
             except RedirectError:
               attempts -= 1
