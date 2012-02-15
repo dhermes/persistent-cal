@@ -71,22 +71,62 @@ PATH_TO_500_TEMPLATE = os.path.join(os.path.dirname(__file__),
 RENDERED_500_PAGE = template.render(PATH_TO_500_TEMPLATE, {})
 
 
+class Error(Exception):
+  """Base error class for library functions."""
+
+
+class BadInterval(Error):
+  """Error corresponding to an unanticipated number of update intervals."""
+
+
+class UnexpectedDescription(Error):
+  """Error corresponding to an unexpected event description."""
+
+
 def JsonAscii(obj):
-  """Returns an object in JSON with ensure_ascii explicitly set True."""
+  """Calls simplejson.dumps with ensure_ascii explicitly set to True.
+
+  Args:
+    obj: any object that can be turned into json
+
+  Returns:
+    A JSON representation of obj that is guaranteed to contain only
+        ascii characters (this is because we use it to store certain
+        objects in mdoels.Event.event_data as a TextProperty)
+  """
   return simplejson.dumps(obj, ensure_ascii=True)
 
 
 def UpdateString(update_intervals):
-  """Returns a JSON object to represent the frequency of updates."""
+  """Calculates a short and long message to represent frequency of updates.
+
+  Args:
+    update_intervals: A list of interval numbers (between 0 and 55) that
+        represent the times an update will occur
+
+  Returns:
+    A two-tuple of the long and short message (respectively) corresponding to
+        the frequency. This is intended to be sent via AJAX and hence the
+        tuple is turned into json before being returned.
+
+  Raises:
+    BadInterval in the case that the length of update_intervals is not
+        a key in the constant RESPONSES
+  """
   length = len(update_intervals)
   if length not in RESPONSES:
-    raise Exception('Bad interval length')
+    raise BadInterval(length)
   else:
     return simplejson.dumps(RESPONSES[length])
 
 
 def InitGCAL():
-  """Initializes a calendar client based on a stored auth token."""
+  """Initializes a calendar client based on a stored auth token.
+
+  Returns:
+    A CalendarClient object with an auth_token built out of
+    values stored in the secret_key module.
+  """
   gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
 
   auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
@@ -100,9 +140,18 @@ def InitGCAL():
 
 
 def ConvertToInterval(timestamp):
-  """Converts a datetime timestamp to a time interval for a cron job."""
-  # Monday 0, sunday 6
-  # 8 intervals in a day, round up hours
+  """Converts a datetime timestamp to a time interval for a cron job.
+
+  Args:
+    timestamp: a datetime.datetime object
+
+  Returns:
+    A value between 0 and 55 corresponding to the interval the timestamp
+    falls in. In this calculation, 12am on Monday is interval 0 and each
+    interval lasts 3 hours.
+  """
+  # In datetime, Monday is day 0, sunday is day 6
+  # Since 8 intervals in a day, multiply by 8. Round up hours.
   interval = 8*timestamp.weekday() + timestamp.hour/3 + 1
 
   # If we are exactly on an hour that is a multiple of three
@@ -119,7 +168,15 @@ def ConvertToInterval(timestamp):
 
 
 def FormatTime(time_value):
-  """Takes a datetime object and returns a formatted time stamp."""
+  """Takes a datetime object and returns a formatted time stamp.
+
+  Args:
+    time_value: a datetime.datetime or datetime.date object
+
+  Returns:
+    A string value of the datetime object formatted according to the values
+        set in time_parse below
+  """
   # Fails if not datetime.datetime or datetime.datetime
 
   # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
@@ -135,11 +192,19 @@ def FormatTime(time_value):
 
 
 def TimeToDTStamp(time_as_str):
-  """Takes time as string and returns a datetime object."""
-  # strftime('%Y-%m-%dT%H:%M:%S.000Z') for datetime
-  # strftime('%Y-%m-%d') for date
+  """Takes time as string and returns a datetime object.
 
-  # Default TZ is UTC/GMT
+  NOTE: Default timezone is UTC/GMT
+
+  Args:
+    time_as_str: a string version of a timestamp which must be in one of
+        two formats '%Y-%m-%dT%H:%M:%S.000Z' or '%Y-%m-%d' which correspond
+        to datetime.datetime and datetime.date respectively
+
+  Returns:
+    A datetime.datetime or datetime.date object if {time_as_str} fits one of the
+        formats else None
+  """
   time_parse = '%Y-%m-%d'
   try:
     converted_val = datetime.datetime.strptime(time_as_str, time_parse)
@@ -156,25 +221,42 @@ def TimeToDTStamp(time_as_str):
 
 
 def StringToDayString(time_as_str):
-  """Takes time as string (date or datetime) and returns date as string."""
-  time_parse = '%Y-%m-%d'
-  try:
-    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
-    return time_as_str
-  except ValueError:
-    pass
+  """Takes time as string (date or datetime) and returns date as string.
 
-  time_parse += 'T%H:%M:%S.000Z'
-  try:
-    converted_val = datetime.datetime.strptime(time_as_str, time_parse)
-    converted_val = converted_val.date()
-    return converted_val.strftime('%Y-%m-%d')
-  except ValueError:
-    pass
+  Args:
+    time_as_str: a string version of a timestamp which must be in one of
+        two formats '%Y-%m-%dT%H:%M:%S.000Z' or '%Y-%m-%d' which correspond
+        to datetime.datetime and datetime.date respectively
+
+  Returns:
+    A string value corresponding to the date only in the format '%Y-%m-%d'
+  """
+  datetime_obj = TimeToDTStamp(time_as_str)
+  if datetime_obj is not None:
+    if isinstance(datetime_obj, datetime.datetime):
+      datetime_obj = datetime_obj.date()
+    return datetime_obj.strftime('%Y-%m-%d')
 
 
 def RemoveTimezone(time_value):
-  """Takes a datetime object and removes the timezone."""
+  """Takes a datetime object and removes the timezone.
+
+  NOTE: This is done to allow comparison of all acceptable timestamps.
+  In the case that time_value is not an expected type, we simply
+  return the original time_value and let the caller deal with the
+  unexpected return type.
+
+  Args:
+    time_value: a datetime.datetime or datetime.date object
+
+  Returns:
+    If time_value is a datetime.datetime object, a new datetime.datetime
+        object is returned with the same values but with time zone stripped,
+        else if time_value is a datetime.date object a datetime.datetime
+        object at 12am on the same date as time_value is returned (again
+        with no time zone), else the original value of time_value is
+        returned.
+  """
   if isinstance(time_value, datetime.datetime):
     if time_value.tzinfo is not None:
       time_parse = '%Y-%m-%dT%H:%M:%S.000Z'
@@ -190,7 +272,17 @@ def RemoveTimezone(time_value):
 
 
 def WhiteList(link):
-  """Determines if a link is on the whitelist and transforms it if needed."""
+  """Determines if a link is on the whitelist and transforms it if needed.
+
+  Args:
+    link: A url corresponding to a calendar feed
+
+  Returns:
+    A tuple (valid, transformed) where valid is a boolean which indicates
+        whether the link is on the whitelist and transformed is an
+        (possibly different) equivalent value of link which is used
+        internally.
+  """
   # If we WhiteList is updated, ParseEvent must be as well
   valid = False
   transformed = link
@@ -213,7 +305,23 @@ def WhiteList(link):
 
 def AddOrUpdateEvent(event_data, gcal, email=None,
                      event=None, push_update=True):
-  """Create event in main application calendar and add user as attendee."""
+  """Create event in main application calendar and add user as attendee.
+
+  Args:
+    event_data: a dictionary containing data relevant to a specific event
+    gcal: a CalendarClient instance that can be used to interact with GCal
+    email: an optional email address that is used in the case that the event
+        already exists and we are adding a new attendee via their email address
+    event: an optional CalendarEventEntry object that is used in the case the
+        event already exists
+    push_update: an optional boolean which defaults to True. When set to True,
+        This will force updates on the existing event (if event is not None)
+
+  Returns:
+    A CalendarEventEntry object corresponding to the event that was added or
+        updated. If the CalendarClient.Update or CalendarClient.InsertEvent
+        request times out after three attempts, returns None.
+  """
   update = (event is not None)
   if not update:
     event = gdata.calendar.data.CalendarEventEntry()
@@ -264,24 +372,45 @@ def AddOrUpdateEvent(event_data, gcal, email=None,
 
 
 def ParseEvent(event):
-  """Parses an iCalendar.cal.Event instance to a predefined format."""
-  # Assumes event is type icalendar.cal.Event
+  """Parses an iCalendar.cal.Event instance to a predefined format.
 
-  # all events have a UID, and almost all begin with 'item-';
-  # those that don't are an away event for the entire trip
+  In the whitelisted feeds, all events have a UID. Almost all events begin
+  with 'item-'. Those that don't begin with 'item-' are a placeholder event
+  event for the entire length of the trip. In this case, we expect the
+  description to resemble the phrase '{name} is in {location}'. This holds
+  except in the case that the location is 'No destination specified', in
+  which case description resembles '{name} is in an unspecified location'. Since
+  events may be attended by multiple users, we replace '{name} is in' with
+  the phrase 'In'.
+
+  Args:
+    event: an icalendar.cal.Event object parsed from a .ics feed.
+
+  Returns:
+    A tuple (uid, event_data) where uid is an attribute from the event
+        and event_data is a dictionary containing the start and end times
+        of the event, and the summary, location and description of the event.
+
+  Raises:
+    UnexpectedDescription in the case that the description does not contain the
+        phrase we expect it to.
+  """
   uid = unicode(event.get('uid'))
   description = unicode(event.get('description'))
   location = unicode(event.get('location'))
-  # No destination specified does not match up
+
+  # The phrase 'No destination specified' does not match its
+  # counterpart in the description, so we transform {location}.
   if location == 'No destination specified':
     location = 'an unspecified location'
 
+  # Check description is formed as we expect
   if not uid.startswith('item-'):
     target = ' is in %s ' % location
     if description.count(target) != 1:
-      # Since whitelisted, we expect the same format
-      raise Exception('Unrecognized event format')
+      raise UnexpectedDescription(description)
 
+    # remove name from the description
     description = 'In %s %s' % (location, description.split(target)[1])
 
   event_data = {'when:from': FormatTime(event.get('dtstart').dt),
@@ -298,7 +427,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
   Will delete events from the datastore that are older than three months. First
   checks that the date provided is at most two days prior to the current one.
 
-  Note: This would seem to argue that relative_date should not be provided, but
+  NOTE: This would seem to argue that relative_date should not be provided, but
   we want to use the relative_date from the server that is executing the cron
   job, not the one executing the cleanup (as there may be some small
   differences). In the that relative_date does not pass this check, we log and
@@ -306,8 +435,9 @@ def MonthlyCleanup(relative_date, defer_now=False):
   this can be removed from the task queue in the case of the invalid input.
 
   Args:
-    relative_date: date provided by calling script. Expected to be current date
-    defer_now: flag to determine whether or not a task should be spawned
+    relative_date: date provided by calling script. Expected to be current date.
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
   """
   logging.info('%s called with: %s', 'MonthlyCleanup', locals())
 
@@ -339,8 +469,6 @@ def MonthlyCleanup(relative_date, defer_now=False):
   prior_date_as_str = FormatTime(prior_date)
   old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
   for event in old_events:
-    # TODO(dhermes) Consider also deleting from main calendar
-    # gcal.delete(event.gcal_edit, force=True)
     logging.info('%s removed from datastore. %s remains in calendar.',
                  event, event.gcal_edit)
     event.delete()
@@ -350,15 +478,23 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
   If the new upcoming events list is different from that on the user_cal, it
-  will iterate through the difference and delete those events that have not yet
-  passed which are still on the calendar.
+  will iterate through the difference and address events that no longer belong.
+  Such events would have been previously marked as upcoming (and stored in
+  UserCal.upcoming) and would not have occurred by the time UpdateUpcoming was
+  called. For such events, the user will be removed from the list of attendees.
+  If there are other remaining users, the event will be updated, else it will be
+  deleted from both the datastore and GCal.
+
   Args:
-    user_cal:
-    upcoming:
-    gcal:
+    user_cal: a UserCal object that will have upcoming events updated
+    upcoming: a list of UID strings representing events in the subscribed feeds
+        of the user that have not occurred yet (i.e. they are upcoming)
+    gcal: a CalendarClient instance that can be used to interact with GCal
   """
   logging.info('%s called with: %s', 'UpdateUpcoming', locals())
 
+  # TODO(dhermes) Calling set() everytime is expensive. Update UserCal to
+  #               ensure UserCal.upcoming is a sorted list of unique elements.
   if set(user_cal.upcoming) != set(upcoming):
     now = datetime.datetime.utcnow()
     for uid in set(user_cal.upcoming).difference(upcoming):
@@ -378,7 +514,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
           #               rather than using GET
           # pylint:disable-msg=E1103
           cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
-          # Filter out this user
+          # Filter out this user from the event attendees
           # pylint:disable-msg=E1103
           cal_event.who = [who_entry for who_entry in cal_event.who
                            if who_entry.email != user_cal.owner.email()]
@@ -390,7 +526,32 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
 
 def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
                             last_used_uid=None, defer_now=False):
-  """Updates a list of calendars for a user, with a call to self on timeout."""
+  """Updates a list of calendar subscriptions for a user.
+
+  Loops through each subscription URL in links and calls UpdateSubscription for
+  each URL. Keeps a list of upcoming events which will be updated by
+  UpdateUpcoming upon completion. If the application encounters a
+  DeadlineExceededError while the events are being processed, the function
+  calls itself, but uses the upcoming, link_index and last_used_uid keyword
+  arguments to save the current processing state.
+
+  Args:
+    links: a list of URLs to the .ics subscription feeds
+    user_cal: a UserCal object that will have upcoming subscriptions updated
+    gcal: a CalendarClient instance that can be used to interact with GCal
+    upcoming: a list of UID strings representing events in the subscribed feeds
+        of the user that have not occurred yet (i.e. they are upcoming). By
+        default this value is None and transformed to [] within the function.
+    link_index: a placeholder index within the list of links which is 0 by
+        default. This is intended to be passed in only by calls from
+        UpdateUserSubscriptions.
+    last_used_uid: a placeholder UID which is None by default. This is intended
+        to be passed in only by calls from UpdateUserSubscriptions. In the case
+        it is not None, it will serve as a starting index within the set of UIDs
+        from the first subscription (first element of links) that is updated.
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
+  """
   logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
 
   if defer_now:
@@ -441,18 +602,23 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
 def UpdateSubscription(link, current_user, gcal, start_uid=None):
   """Updates the GCal instance with the events in link for the current_user.
 
-  Returns a generator instance which yields (uid, bool) tuples where bool
-  is true if the event at uid is upcoming
-
   Args:
     link: Link to calendar feed being subscribed to
     current_user: a User instance corresponding to the user that is updating
     gcal: a CalendarClient instance used to make updates to GCal
-    start_uid:
+    start_uid: a placeholder UID which is None by default. This is intended
+        to be passed in only by calls from UpdateUserSubscriptions. In the case
+        it is not None, it will serve as a starting index within the set of
+        event UIDs from {link}.
+
+  Returns:
+    A generator instance which yields tuples (uid, is_upcoming, failed) tuples
+        where uid is the id of an event, is_upcoming is a boolean that is True
+        if and only if the event has not occurred yet (i.e. is upcoming) and
+        failed is a boolean that is True if and only if the three attempts to
+        add or update the event fail.
   """
   logging.info('%s called with: %s', 'UpdateSubscription', locals())
-
-  current_user_id = current_user.user_id()
 
   valid, link = WhiteList(link)
   if not valid:
@@ -460,17 +626,18 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
     # http://www.python.org/dev/peps/pep-0255/ (Specification: Return)
     return
 
+  current_user_id = current_user.user_id()
+  now = datetime.datetime.utcnow()
+
   import_feed = urlopen(link)
   ical = Calendar.from_string(import_feed.read())
   import_feed.close()
-
-  now = datetime.datetime.utcnow()
 
   start_index = 0
   if start_uid is not None:
     # pylint:disable-msg=E1103
     uid_list = [component.get('uid', '') for component in ical.walk()]
-    if uid_list.count(start_uid) > 0:
+    if start_uid in uid_list:
       start_index = uid_list.index(start_uid)
 
   for component in ical.walk()[start_index:]:  # pylint:disable-msg=E1103
@@ -576,32 +743,49 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 ############# Handler class helper #############
 ################################################
 
-def email_admins(traceback_info, defer_now=False):
-  """Sends email to admins with the preferred message, with option to defer."""
+def email_admins(error_msg, defer_now=False):
+  """Sends email to admins with the preferred message, with option to defer.
+
+  Uses the template error_notify.templ to generate an email with the {error_msg}
+  sent to the list of admins in admins.ADMINS_TO.
+
+  Args:
+    error_msg: A string containing an error to be sent to admins by email
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
+  """
   if defer_now:
-    defer(email_admins, traceback_info, defer_now=False, _url='/workers')
+    defer(email_admins, error_msg, defer_now=False, _url='/workers')
     return
 
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
   subject = 'Persistent Cal Error: Admin Notify'
   email_path = os.path.join(os.path.dirname(__file__),
                             'templates', 'error_notify.templ')
-  body = template.render(email_path, {'error': traceback_info})
+  body = template.render(email_path, {'error': error_msg})
   mail.send_mail(sender=sender, to=ADMINS_TO,
                  subject=subject, body=body)
 
 
 def deadline_decorator(method):
-  """Decorator for HTTP verbs to handle GAE timeout."""
+  """Decorator for HTTP verbs to handle GAE timeout.
+
+  Args:
+    method: a callable object, expected to be a method of an object from
+        a class that inherits from RequestHandler
+
+  Returns:
+    A new function which calls {method}, catches certain errors
+        and responds to them gracefully
+  """
 
   def wrapped_method(self, *args, **kwargs):
     """Returned function that uses method from outside scope.
 
-    Tries to execute the method with the arguments. If either
-    a PermanentTaskFailure is thrown (from deferred library) or if
-    DeadlineExceededError is thrown (inherits directly from
-    BaseException) administrators are emailed and then cleanup
-    occurs.
+    Tries to execute the method with the arguments. If either a
+    PermanentTaskFailure is thrown (from deferred library) or if
+    DeadlineExceededError is thrown (inherits directly from BaseException)
+    administrators are emailed and then cleanup occurs.
     """
     try:
       method(self, *args, **kwargs)
@@ -656,7 +840,12 @@ class ExtendedHandler(RequestHandler):
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
 
   def handle_exception(self, exception, debug_mode):
-    """Custom handler for all GAE errors that inherit from Exception."""
+    """Custom handler for all GAE errors that inherit from Exception.
+
+    Args:
+      exception: the exception that was thrown
+      debug_mode: True if the web application is running in debug mode
+    """
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
     logging.exception(traceback_info)
     email_admins(traceback_info, defer_now=True)
