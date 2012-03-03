@@ -46,5 +46,5 @@ from models import Event
 def UpdateEvents():
   events = Event.all()
   for event in events:
-    event.gcal_edit = event.gcal_edit_old
+    event.gcal_edit_old = event.gcal_edit
     event.put()
