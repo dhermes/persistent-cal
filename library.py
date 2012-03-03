@@ -470,7 +470,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
   old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
   for event in old_events:
     logging.info('%s removed from datastore. %s remains in calendar.',
-                 event, event.gcal_edit)
+                 event, event.gcal_edit_old)
     event.delete()
 
 
@@ -504,16 +504,17 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
       if TimeToDTStamp(event_data['when:to']) > now:
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103
-          gcal.delete(event.gcal_edit, force=True)  # pylint:disable-msg=E1103
           # pylint:disable-msg=E1103
-          logging.info('%s deleted', event.gcal_edit)
+          gcal.delete(event.gcal_edit_old, force=True)
+          # pylint:disable-msg=E1103
+          logging.info('%s deleted', event.gcal_edit_old)
           event.delete()  # pylint:disable-msg=E1103
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
           # pylint:disable-msg=E1103
-          cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+          cal_event = gcal.GetEventEntry(uri=event.gcal_edit_old)
           # Filter out this user from the event attendees
           # pylint:disable-msg=E1103
           cal_event.who = [who_entry for who_entry in cal_event.who
@@ -665,7 +666,8 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
                       end_date=end_date,
-                      gcal_edit=gcal_edit)
+                      gcal_edit=gcal_edit,
+                      gcal_edit_old=gcal_edit)
         event.put()
 
         # execution has successfully completed
@@ -681,9 +683,9 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           while attempts:
             try:
               # pylint:disable-msg=E1103
-              cal_event = gcal.GetEventEntry(uri=event.gcal_edit)
+              cal_event = gcal.GetEventEntry(uri=event.gcal_edit_old)
               # pylint:disable-msg=E1103
-              logging.info('GET sent to %s', event.gcal_edit)
+              logging.info('GET sent to %s', event.gcal_edit_old)
               break
             except RedirectError:
               attempts -= 1
