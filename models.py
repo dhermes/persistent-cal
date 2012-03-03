@@ -29,6 +29,7 @@ class Event(db.Model):
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as simplejson
   end_date = db.StringProperty(required=True)
+  # plan to delete this and move into event_data as 'event_id' key
   gcal_edit = db.StringProperty(required=True)
   gcal_edit_old = db.StringProperty()
 
