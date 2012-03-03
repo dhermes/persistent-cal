@@ -25,3 +25,7 @@ CONSUMER_KEY = 'fake_key'
 CONSUMER_SECRET = 'fake_key_secret'
 TOKEN = 'fake_token'
 TOKEN_SECRET = 'fake_token_secret'
+# Transitional
+CLIENT_ID = 'fake_id'
+CLIENT_SECRET = 'fake_client_secret'
+DEVELOPER_KEY = 'developer_key'

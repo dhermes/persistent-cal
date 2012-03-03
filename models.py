@@ -30,6 +30,7 @@ class Event(db.Model):
   event_data = db.TextProperty(required=True)  # python dict as simplejson
   end_date = db.StringProperty(required=True)
   gcal_edit = db.StringProperty(required=True)
+  gcal_edit_old = db.StringProperty()
 
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()
