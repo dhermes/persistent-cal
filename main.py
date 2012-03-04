@@ -39,14 +39,14 @@ from google.appengine.ext.webapp import WSGIApplication
 # App specific libraries
 from library import ConvertToInterval
 from library import ExtendedHandler
-from library import InitGCAL
+from library import InitService
 from library import UpdateString
 from library import UpdateUserSubscriptions
 from library import WhiteList
 from models import UserCal
 
 
-GCAL = None
+SERVICE = None
 # split week in 56 3 hour windows, and assign the entire list based on these
 # windows (two day is really 42 hours, 14 units)
 FREQUENCIES = {'three-hrs': [val for val in range(56)],
@@ -149,17 +149,17 @@ class AddSubscription(ExtendedHandler):
 
     user_cal.put()
 
-    global GCAL
-    if GCAL is None:
-      logging.info('GCAL initialized up')
-      GCAL = InitGCAL()
+    global SERVICE
+    if SERVICE is None:
+      logging.info('Service initialized')
+      SERVICE = InitService()
 
     # TODO(dhermes) since user_cal has already been updated/added, be sure
     #               this does not error out. If it does error out, catch the
     #               error and still leave this function. Also within UpSc,
     #               make sure all events that are added to GCal are also added
     #               to the datastore.
-    UpdateUserSubscriptions([link], user_cal, GCAL, defer_now=True)
+    UpdateUserSubscriptions([link], user_cal, SERVICE, defer_now=True)
     self.response.out.write(simplejson.dumps(user_cal.calendars))
 
 

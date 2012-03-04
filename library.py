@@ -33,12 +33,11 @@ import traceback
 from urllib2 import urlopen
 
 # Third-party libraries
-import atom
-import gdata.calendar.client
-import gdata.calendar.data
-from gdata.client import RedirectError
-import gdata.gauth
+from apiclient.discovery import build
+from apiclient.errors import HttpError
+import httplib2
 from icalendar import Calendar
+from oauth2client.file import Storage
 
 # App engine specific libraries
 from google.appengine.api import mail
@@ -52,14 +51,12 @@ from google.appengine.runtime import DeadlineExceededError
 # App specific libraries
 from admins import ADMINS_TO
 from models import Event
-from secret_key import CONSUMER_KEY
-from secret_key import CONSUMER_SECRET
-from secret_key import TOKEN
-from secret_key import TOKEN_SECRET
+from secret_key import CLIENT_ID
+from secret_key import CLIENT_SECRET
+from secret_key import DEVELOPER_KEY
 
 
-URI = ('https://www.google.com/calendar/feeds/'
-       'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
+CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
 RESPONSES = {1: ['once a week', 'week'],
              4: ['every two days', 'two-day'],
              7: ['once a day', 'day'],
@@ -120,23 +117,21 @@ def UpdateString(update_intervals):
     return simplejson.dumps(RESPONSES[length])
 
 
-def InitGCAL():
-  """Initializes a calendar client based on a stored auth token.
+def InitService():
+  """Initializes a service object to make calendar requests.
 
   Returns:
-    A CalendarClient object with an auth_token built out of
-    values stored in the secret_key module.
+    A Resource object intended for making calls to an Apiary API.
   """
-  gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
+  storage = Storage('calendar.dat')
+  credentials = storage.get()
+  if credentials is None or credentials.invalid == True:
+    email_admins('Credentials in calendar resource not good.', defer_now=True)
 
-  auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
-                                          consumer_secret=CONSUMER_SECRET,
-                                          token=TOKEN,
-                                          token_secret=TOKEN_SECRET,
-                                          auth_state=3)
-
-  gcal.auth_token = auth_token
-  return gcal
+  http = httplib2.Http()
+  http = credentials.authorize(http)
+  return build(serviceName='calendar', version='v3',
+               http=http, developerKey=DEVELOPER_KEY)
 
 
 def ConvertToInterval(timestamp):
@@ -303,72 +298,83 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, gcal, email=None,
+def AddOrUpdateEvent(event_data, service, email=None,
                      event=None, push_update=True):
   """Create event in main application calendar and add user as attendee.
 
   Args:
     event_data: a dictionary containing data relevant to a specific event
-    gcal: a CalendarClient instance that can be used to interact with GCal
+    service: a Resource object intended for making calls to an Apiary API
     email: an optional email address that is used in the case that the event
         already exists and we are adding a new attendee via their email address
-    event: an optional CalendarEventEntry object that is used in the case the
-        event already exists
+    event: a dictionary of data to be sent with the service. When None,
+        corresponds to a new event.
     push_update: an optional boolean which defaults to True. When set to True,
         This will force updates on the existing event (if event is not None)
 
   Returns:
-    A CalendarEventEntry object corresponding to the event that was added or
-        updated. If the CalendarClient.Update or CalendarClient.InsertEvent
-        request times out after three attempts, returns None.
+    A dictionary containing the contents of the event that was added or updated.
+        If update or insert request times out after three tries, returns None.
   """
-  update = (event is not None)
-  if not update:
-    event = gdata.calendar.data.CalendarEventEntry()
+  update = True
+  if event is None:
+    event = {}
+    update = False
 
-  event.title = atom.data.Title(text=event_data['summary'])
-  event.content = atom.data.Content(text=event_data['description'])
+  event['summary'] = event_data['summary']
+  event['description'] = event_data['description']
 
   # Where
-  event.where.append(gdata.calendar.data.CalendarWhere(
-      value=event_data['location']))
+  event['location'] = event_data['location']
 
   # When
-  start_time = event_data['when:from']
-  end_time = event_data['when:to']
-  event.when.append(gdata.calendar.data.When(start=start_time, end=end_time))
+  start = event_data['when:from']
+  if start.endswith('Z'):
+    event['start'] = {'date': start}
+  else:
+    event['start'] = {'dateTime': start}
+
+  end = event_data['when:to']
+  if end.endswith('Z'):
+    event['end'] = {'date': end}
+  else:
+    event['end'] = {'dateTime': end}
 
   if update:
     attempts = 3
     if push_update:
       while attempts:
         try:
-          gcal.Update(event)
-          logging.info('%s updated', event.get_edit_link().href)
+          updated_event = service.events().update(calendarId=CALENDAR_ID,
+                                                  eventId=event['id'],
+                                                  body=event).execute()
+          logging.info('%s updated', updated_event['id'])
           break
-        except RedirectError:
+        except HttpError:
           attempts -= 1
           sleep(3)
 
-    # Returns none if event did not get updated (if it needed to)
-    return event if attempts else None
+    # Returns None if event did not get updated (if it needed to)
+    return updated_event if attempts else None
   else:
     # Who
-    who_add = gdata.calendar.data.EventWho(email=email)
-    event.who.append(who_add)
+    if 'attendees' not in event:
+      event['attendees'] = []
+    event['attendees'].append({'email': email})
 
     attempts = 3
-    new_event = None
     while attempts:
       try:
-        new_event = gcal.InsertEvent(event, insert_uri=URI)
-        logging.info('%s was inserted', new_event.get_edit_link().href)
+        new_event = service.events().insert(calendarId=CALENDAR_ID,
+                                            body=event).execute()
+        logging.info('%s was inserted', new_event['id'])
         break
-      except RedirectError:
+      except HttpError:
         attempts -= 1
         sleep(3)
 
-    return new_event
+    # Returns None if event did not get updated (if it needed to)
+    return new_event if attempts else None
 
 
 def ParseEvent(event):
@@ -474,7 +480,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     event.delete()
 
 
-def UpdateUpcoming(user_cal, upcoming, gcal):
+def UpdateUpcoming(user_cal, upcoming, service):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
   If the new upcoming events list is different from that on the user_cal, it
@@ -489,7 +495,7 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
     user_cal: a UserCal object that will have upcoming events updated
     upcoming: a list of UID strings representing events in the subscribed feeds
         of the user that have not occurred yet (i.e. they are upcoming)
-    gcal: a CalendarClient instance that can be used to interact with GCal
+    service: a Resource object intended for making calls to an Apiary API
   """
   logging.info('%s called with: %s', 'UpdateUpcoming', locals())
 
@@ -505,7 +511,8 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103
           # pylint:disable-msg=E1103
-          gcal.delete(event.gcal_edit_old, force=True)
+          service.events().delete(calendarId=CALENDAR_ID,
+                                  eventId=event.gcal_edit).execute()
           # pylint:disable-msg=E1103
           logging.info('%s deleted', event.gcal_edit_old)
           event.delete()  # pylint:disable-msg=E1103
@@ -514,19 +521,28 @@ def UpdateUpcoming(user_cal, upcoming, gcal):
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
           # pylint:disable-msg=E1103
-          cal_event = gcal.GetEventEntry(uri=event.gcal_edit_old)
+          cal_event = service.events().get(calendarId=CALENDAR_ID,
+                                           eventId=event.gcal_edit).execute()
           # Filter out this user from the event attendees
           # pylint:disable-msg=E1103
-          cal_event.who = [who_entry for who_entry in cal_event.who
-                           if who_entry.email != user_cal.owner.email()]
-          gcal.Update(cal_event)
+          if 'attendees' not in cal_event:
+            cal_event['attendees'] = []
+          cal_event['attendees'] = [
+              attendee_dict for attendee_dict in cal_event['attendees']
+              if attendee_dict['email'] != user_cal.owner.email()
+          ]
+
+          service.events().update(calendarId=CALENDAR_ID,
+                                  eventId=cal_event['id'],
+                                  body=cal_event).execute()
           event.put()
+
     user_cal.upcoming = list(set(upcoming))
     user_cal.put()
 
 
-def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
-                            last_used_uid=None, defer_now=False):
+def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
+                            link_index=0, last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
 
   Loops through each subscription URL in links and calls UpdateSubscription for
@@ -539,7 +555,7 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
   Args:
     links: a list of URLs to the .ics subscription feeds
     user_cal: a UserCal object that will have upcoming subscriptions updated
-    gcal: a CalendarClient instance that can be used to interact with GCal
+    service: a Resource object intended for making calls to an Apiary API
     upcoming: a list of UID strings representing events in the subscribed feeds
         of the user that have not occurred yet (i.e. they are upcoming). By
         default this value is None and transformed to [] within the function.
@@ -556,7 +572,7 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
   logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
 
   if defer_now:
-    defer(UpdateUserSubscriptions, links, user_cal, gcal,
+    defer(UpdateUserSubscriptions, links, user_cal, service,
           upcoming=upcoming, link_index=link_index,
           last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
@@ -577,9 +593,9 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
       # middle of the feed for the first link in {links}
       if index == 0 and last_used_uid is not None:
         uid_generator = UpdateSubscription(link, user_cal.owner,
-                                           gcal, start_uid=last_used_uid)
+                                           service, start_uid=last_used_uid)
       else:
-        uid_generator = UpdateSubscription(link, user_cal.owner, gcal)
+        uid_generator = UpdateSubscription(link, user_cal.owner, service)
 
       for uid, is_upcoming, failed in uid_generator:
         if is_upcoming:
@@ -590,23 +606,23 @@ def UpdateUserSubscriptions(links, user_cal, gcal, upcoming=None, link_index=0,
                        defer_now=True)
   except DeadlineExceededError:
     # NOTE: upcoming has possibly been updated inside the try statement
-    defer(UpdateUserSubscriptions, links, user_cal, gcal,
+    defer(UpdateUserSubscriptions, links, user_cal, service,
           upcoming=upcoming, link_index=index, last_used_uid=uid,
           defer_now=defer_now, _url='/workers')
     return
 
   # If the loop completes without timing out
-  defer(UpdateUpcoming, user_cal, upcoming, gcal, _url='/workers')
+  defer(UpdateUpcoming, user_cal, upcoming, service, _url='/workers')
   return
 
 
-def UpdateSubscription(link, current_user, gcal, start_uid=None):
+def UpdateSubscription(link, current_user, service, start_uid=None):
   """Updates the GCal instance with the events in link for the current_user.
 
   Args:
     link: Link to calendar feed being subscribed to
     current_user: a User instance corresponding to the user that is updating
-    gcal: a CalendarClient instance used to make updates to GCal
+    service: a Resource object intended for making calls to an Apiary API
     start_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of
@@ -653,14 +669,14 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
       if event is None:
         # Create new event
         # (leaving out the event argument creates a new event)
-        cal_event = AddOrUpdateEvent(event_data, gcal,
+        cal_event = AddOrUpdateEvent(event_data, service,
                                      email=current_user.email())
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           yield (uid, False, True)
           continue
 
-        gcal_edit = cal_event.get_edit_link().href
+        gcal_edit = cal_event['id']
         end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
@@ -683,11 +699,12 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
           while attempts:
             try:
               # pylint:disable-msg=E1103
-              cal_event = gcal.GetEventEntry(uri=event.gcal_edit_old)
+              cal_event = service.events().get(
+                  calendarId=CALENDAR_ID, eventId=event.gcal_edit).execute()
               # pylint:disable-msg=E1103
-              logging.info('GET sent to %s', event.gcal_edit_old)
+              logging.info('GET sent to %s', event.gcal_edit)
               break
-            except RedirectError:
+            except HttpError:
               attempts -= 1
               sleep(3)
 
@@ -702,8 +719,9 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
             event.who.append(current_user_id)  # id is string
 
             # add existing event to current_user's calendar
-            who_add = gdata.calendar.data.EventWho(email=current_user.email())
-            cal_event.who.append(who_add)
+            if 'attendees' not in cal_event:
+              cal_event['attendees'] = []
+            cal_event['attendees'].append({'email': current_user.email()})
 
           # Update existing event
           # pylint:disable-msg=E1103
@@ -712,22 +730,24 @@ def UpdateSubscription(link, current_user, gcal, start_uid=None):
 
             # Don't push update to avoid pushing twice (if both changed)
             AddOrUpdateEvent(event_data,
-                             gcal,
+                             service,
                              event=cal_event,
                              push_update=False)
-            # push_update=False, impossible to have RedirectError
+            # push_update=False, impossible to have HttpError
 
           # Push all updates to calendar event
           attempts = 3
           while attempts:
             try:
-              gcal.Update(cal_event)
-              logging.info('%s updated', cal_event.get_edit_link().href)
+              service.events().update(calendarId=CALENDAR_ID,
+                                      eventId=cal_event['id'],
+                                      body=cal_event).execute()
+              logging.info('%s updated', cal_event['id'])
 
               # After all possible changes to the Event instance have occurred
               event.put()  # pylint:disable-msg=E1103
               break
-            except RedirectError:
+            except HttpError:
               attempts -= 1
               sleep(3)
 
