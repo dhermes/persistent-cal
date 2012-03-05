@@ -31,7 +31,7 @@ from google.appengine.ext.webapp import WSGIApplication
 # App specific libraries
 from library import ConvertToInterval
 from library import ExtendedHandler
-from library import InitService
+from library import InitCredentials
 from library import MonthlyCleanup
 from library import UpdateUserSubscriptions
 from models import UserCal
@@ -52,17 +52,17 @@ class MainHandler(ExtendedHandler):
 
     now = datetime.utcnow()
     now_interval = ConvertToInterval(now)
-    SERVICE = None
+    CREDENTIALS = None
 
     # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
     #               that all_users becomes to big to set off background tasks
     all_users = UserCal.all()
     for user_cal in all_users:
       if now_interval in user_cal.update_intervals:
-        if SERVICE is None:
-          SERVICE = InitService()
+        if CREDENTIALS is None:
+          CREDENTIALS = InitCredentials()
         UpdateUserSubscriptions(user_cal.calendars, user_cal,
-                                SERVICE, defer_now=True)
+                                CREDENTIALS, defer_now=True)
 
     # 1st of the month, 8 intervals per day
     if now.day == 1 and now_interval % 8 == 0:

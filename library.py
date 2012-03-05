@@ -56,7 +56,13 @@ from secret_key import CLIENT_SECRET
 from secret_key import DEVELOPER_KEY
 
 
+## TEMP IMPORT
+from urllib import quote
+## TEMP IMPORT
+
+
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
+CREDENTIALS_FILENAME = 'calendar.dat'
 RESPONSES = {1: ['once a week', 'week'],
              4: ['every two days', 'two-day'],
              7: ['once a day', 'day'],
@@ -78,6 +84,10 @@ class BadInterval(Error):
 
 class UnexpectedDescription(Error):
   """Error corresponding to an unexpected event description."""
+
+
+class CredentialsLoadError(Error):
+  """Error when credentials are not loaded correctly from a specified file."""
 
 
 def JsonAscii(obj):
@@ -117,16 +127,43 @@ def UpdateString(update_intervals):
     return simplejson.dumps(RESPONSES[length])
 
 
-def InitService():
+def InitCredentials(filename=CREDENTIALS_FILENAME):
+  """Initializes an OAuth2Credentials object from a file.
+
+  Args:
+    filename: The location of the pickled contents of the
+        OAuth2Credentials object.
+
+  Returns:
+    An OAuth2Credentials object.
+  """
+  storage = Storage(CREDENTIALS_FILENAME)
+  credentials = storage.get()
+
+  if credentials is None or credentials.invalid == True:
+    email_admins('Credentials in calendar resource not good.', defer_now=True)
+    raise CredentialsLoadError('No credentials retrieved from calendar.dat')
+
+  return credentials
+
+
+def InitService(credentials=None):
   """Initializes a service object to make calendar requests.
+
+  Args:
+    credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is None, attempt to get credentials from
+        calendar.dat file.
 
   Returns:
     A Resource object intended for making calls to an Apiary API.
+
+  Raises:
+    CredentialsLoadError in the case that no credentials are passed in and they
+        can't be loaded from the specified file
   """
-  storage = Storage('calendar.dat')
-  credentials = storage.get()
-  if credentials is None or credentials.invalid == True:
-    email_admins('Credentials in calendar resource not good.', defer_now=True)
+  if credentials is None:
+    credentials = InitCredentials()
 
   http = httplib2.Http()
   http = credentials.authorize(http)
@@ -298,16 +335,16 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, service, email=None,
+def AddOrUpdateEvent(event_data, credentials, email=None,
                      event=None, push_update=True):
   """Create event in main application calendar and add user as attendee.
 
   Args:
     event_data: a dictionary containing data relevant to a specific event
-    service: a Resource object intended for making calls to an Apiary API
+    credentials: An OAuth2Credentials object used to build a service object.
     email: an optional email address that is used in the case that the event
         already exists and we are adding a new attendee via their email address
-    event: a dictionary of data to be sent with the service. When None,
+    event: a dictionary of data to be sent with a Resource object. When None,
         corresponds to a new event.
     push_update: an optional boolean which defaults to True. When set to True,
         This will force updates on the existing event (if event is not None)
@@ -316,6 +353,8 @@ def AddOrUpdateEvent(event_data, service, email=None,
     A dictionary containing the contents of the event that was added or updated.
         If update or insert request times out after three tries, returns None.
   """
+  service = InitService(credentials)
+
   update = True
   if event is None:
     event = {}
@@ -330,15 +369,15 @@ def AddOrUpdateEvent(event_data, service, email=None,
   # When
   start = event_data['when:from']
   if start.endswith('Z'):
-    event['start'] = {'date': start}
-  else:
     event['start'] = {'dateTime': start}
+  else:
+    event['start'] = {'date': start}
 
   end = event_data['when:to']
   if end.endswith('Z'):
-    event['end'] = {'date': end}
-  else:
     event['end'] = {'dateTime': end}
+  else:
+    event['end'] = {'date': end}
 
   if update:
     attempts = 3
@@ -480,7 +519,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     event.delete()
 
 
-def UpdateUpcoming(user_cal, upcoming, service):
+def UpdateUpcoming(user_cal, upcoming, credentials):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
   If the new upcoming events list is different from that on the user_cal, it
@@ -495,9 +534,11 @@ def UpdateUpcoming(user_cal, upcoming, service):
     user_cal: a UserCal object that will have upcoming events updated
     upcoming: a list of UID strings representing events in the subscribed feeds
         of the user that have not occurred yet (i.e. they are upcoming)
-    service: a Resource object intended for making calls to an Apiary API
+    credentials: An OAuth2Credentials object used to build a service object.
   """
   logging.info('%s called with: %s', 'UpdateUpcoming', locals())
+
+  service = InitService(credentials)
 
   # TODO(dhermes) Calling set() everytime is expensive. Update UserCal to
   #               ensure UserCal.upcoming is a sorted list of unique elements.
@@ -541,7 +582,7 @@ def UpdateUpcoming(user_cal, upcoming, service):
     user_cal.put()
 
 
-def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
+def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
                             link_index=0, last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
 
@@ -555,7 +596,7 @@ def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
   Args:
     links: a list of URLs to the .ics subscription feeds
     user_cal: a UserCal object that will have upcoming subscriptions updated
-    service: a Resource object intended for making calls to an Apiary API
+    credentials: An OAuth2Credentials object used to build a service object.
     upcoming: a list of UID strings representing events in the subscribed feeds
         of the user that have not occurred yet (i.e. they are upcoming). By
         default this value is None and transformed to [] within the function.
@@ -572,10 +613,12 @@ def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
   logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
 
   if defer_now:
-    defer(UpdateUserSubscriptions, links, user_cal, service,
+    defer(UpdateUserSubscriptions, links, user_cal, credentials,
           upcoming=upcoming, link_index=link_index,
           last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
+
+  service = InitService(credentials)
 
   if link_index > 0:
     links = links[link_index:]
@@ -593,9 +636,9 @@ def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
       # middle of the feed for the first link in {links}
       if index == 0 and last_used_uid is not None:
         uid_generator = UpdateSubscription(link, user_cal.owner,
-                                           service, start_uid=last_used_uid)
+                                           credentials, start_uid=last_used_uid)
       else:
-        uid_generator = UpdateSubscription(link, user_cal.owner, service)
+        uid_generator = UpdateSubscription(link, user_cal.owner, credentials)
 
       for uid, is_upcoming, failed in uid_generator:
         if is_upcoming:
@@ -606,23 +649,23 @@ def UpdateUserSubscriptions(links, user_cal, service, upcoming=None,
                        defer_now=True)
   except DeadlineExceededError:
     # NOTE: upcoming has possibly been updated inside the try statement
-    defer(UpdateUserSubscriptions, links, user_cal, service,
+    defer(UpdateUserSubscriptions, links, user_cal, credentials,
           upcoming=upcoming, link_index=index, last_used_uid=uid,
           defer_now=defer_now, _url='/workers')
     return
 
   # If the loop completes without timing out
-  defer(UpdateUpcoming, user_cal, upcoming, service, _url='/workers')
+  defer(UpdateUpcoming, user_cal, upcoming, credentials, _url='/workers')
   return
 
 
-def UpdateSubscription(link, current_user, service, start_uid=None):
+def UpdateSubscription(link, current_user, credentials, start_uid=None):
   """Updates the GCal instance with the events in link for the current_user.
 
   Args:
     link: Link to calendar feed being subscribed to
     current_user: a User instance corresponding to the user that is updating
-    service: a Resource object intended for making calls to an Apiary API
+    credentials: An OAuth2Credentials object used to build a service object.
     start_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of
@@ -636,6 +679,8 @@ def UpdateSubscription(link, current_user, service, start_uid=None):
         add or update the event fail.
   """
   logging.info('%s called with: %s', 'UpdateSubscription', locals())
+
+  service = InitService(credentials)
 
   valid, link = WhiteList(link)
   if not valid:
@@ -669,7 +714,7 @@ def UpdateSubscription(link, current_user, service, start_uid=None):
       if event is None:
         # Create new event
         # (leaving out the event argument creates a new event)
-        cal_event = AddOrUpdateEvent(event_data, service,
+        cal_event = AddOrUpdateEvent(event_data, credentials,
                                      email=current_user.email())
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
@@ -677,13 +722,15 @@ def UpdateSubscription(link, current_user, service, start_uid=None):
           continue
 
         gcal_edit = cal_event['id']
+        gcal_edit_old = ('https://www.google.com/calendar/feeds/%s'
+                         '/private/full/%s' % (quote(CALENDAR_ID), gcal_edit))
         end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
                       end_date=end_date,
                       gcal_edit=gcal_edit,
-                      gcal_edit_old=gcal_edit)
+                      gcal_edit_old=gcal_edit_old)
         event.put()
 
         # execution has successfully completed
@@ -730,7 +777,7 @@ def UpdateSubscription(link, current_user, service, start_uid=None):
 
             # Don't push update to avoid pushing twice (if both changed)
             AddOrUpdateEvent(event_data,
-                             service,
+                             credentials,
                              event=cal_event,
                              push_update=False)
             # push_update=False, impossible to have HttpError
