@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+
+import os
+
+hooks_dir = os.path.dirname(os.path.abspath(__file__))
+relative_dir = os.path.join(hooks_dir, '../..')
+project_root = os.path.abspath(relative_dir)
+def switch_contents(fi):
+  git_included_fi = os.path.join(project_root, fi)
+  confidential_fi = os.path.join(project_root, '_%s' % fi)
+
+  with open(git_included_fi, 'rU') as fh:
+    git_included_contents = fh.read()
+
+  with open(confidential_fi, 'rU') as fh:
+    confidential_contents = fh.read()
+
+  with open(git_included_fi, 'w') as fh:
+    fh.write(confidential_contents)
+
+  with open(confidential_fi, 'w') as fh:
+    fh.write(git_included_contents)
+
+
+protected_files = ['secret_key.py', 'admins.py', 'calendar.dat']
+for fi in protected_files:
+  switch_contents(fi)
