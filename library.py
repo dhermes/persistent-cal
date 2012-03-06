@@ -390,7 +390,8 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
                                                   body=event).execute()
           logging.info('%s updated', updated_event['id'])
           break
-        except HttpError:
+        except HttpError as e:
+          logging.info(e)
           attempts -= 1
           sleep(3)
 
@@ -409,7 +410,8 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
                                             body=event).execute()
         logging.info('%s was inserted', new_event['id'])
         break
-      except HttpError:
+      except HttpError as e:
+        logging.info(e)
         attempts -= 1
         sleep(3)
 
@@ -751,7 +753,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
               # pylint:disable-msg=E1103
               logging.info('GET sent to %s', event.gcal_edit)
               break
-            except HttpError:
+            except HttpError as e:
+              logging.info(e)
               attempts -= 1
               sleep(3)
 
@@ -794,7 +797,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
               # After all possible changes to the Event instance have occurred
               event.put()  # pylint:disable-msg=E1103
               break
-            except HttpError:
+            except HttpError as e:
+              logging.info(e)
               attempts -= 1
               sleep(3)
 
