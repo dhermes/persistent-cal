@@ -381,6 +381,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
 
   if update:
     attempts = 3
+    updated_event = None
     if push_update:
       while attempts:
         try:
@@ -393,8 +394,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
           attempts -= 1
           sleep(3)
 
-    # Returns None if event did not get updated (if it needed to)
-    return updated_event if attempts else None
+    return updated_event
   else:
     # Who
     if 'attendees' not in event:
@@ -402,6 +402,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
     event['attendees'].append({'email': email})
 
     attempts = 3
+    new_event = None
     while attempts:
       try:
         new_event = service.events().insert(calendarId=CALENDAR_ID,
@@ -412,8 +413,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
         attempts -= 1
         sleep(3)
 
-    # Returns None if event did not get updated (if it needed to)
-    return new_event if attempts else None
+    return new_event
 
 
 def ParseEvent(event):
