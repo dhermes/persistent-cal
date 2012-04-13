@@ -2,3 +2,7 @@ cron:
 - description: calendar check job
   url: /cron
   schedule: every 3 hours synchronized
+
+- description: calendar monthly clean up
+  url: /cron-monthly
+  schedule: 1 of month 00:00

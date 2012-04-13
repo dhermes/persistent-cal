@@ -64,13 +64,21 @@ class MainHandler(ExtendedHandler):
         UpdateUserSubscriptions(user_cal.calendars, user_cal,
                                 CREDENTIALS, defer_now=True)
 
-    # 1st of the month, 8 intervals per day
-    if now.day == 1 and now_interval % 8 == 0:
-      MonthlyCleanup(now.date(), defer_now=True)
+
+class CleanupHandler(ExtendedHandler):
+
+  def get(self):
+    """Updates once a month."""
+    if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
+      return
+
+    now = datetime.utcnow()
+    MonthlyCleanup(now.date(), defer_now=True)
 
 
 application = WSGIApplication([
     ('/cron', MainHandler),
+    ('/cron-monthly', CleanupHandler),
     ], debug=True)
 
 

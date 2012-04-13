@@ -23,6 +23,10 @@ handlers:
   script: cron.py
   login: admin
 
+- url: /cron-monthly
+  script: cron.py
+  login: admin
+
 - url: /workers
   script: main.py
   login: admin
