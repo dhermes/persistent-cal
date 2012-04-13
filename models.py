@@ -31,7 +31,6 @@ class Event(db.Model):
   end_date = db.StringProperty(required=True)
   # plan to delete this and move into event_data as 'event_id' key
   gcal_edit = db.StringProperty(required=True)
-  gcal_edit_old = db.StringProperty()
 
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()

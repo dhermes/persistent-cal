@@ -517,7 +517,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
   old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
   for event in old_events:
     logging.info('%s removed from datastore. %s remains in calendar.',
-                 event, event.gcal_edit_old)
+                 event, event.gcal_edit)
     event.delete()
 
 
@@ -557,7 +557,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
           service.events().delete(calendarId=CALENDAR_ID,
                                   eventId=event.gcal_edit).execute()
           # pylint:disable-msg=E1103
-          logging.info('%s deleted', event.gcal_edit_old)
+          logging.info('%s deleted', event.gcal_edit)
           event.delete()  # pylint:disable-msg=E1103
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
@@ -724,15 +724,12 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           continue
 
         gcal_edit = cal_event['id']
-        gcal_edit_old = ('https://www.google.com/calendar/feeds/%s'
-                         '/private/full/%s' % (quote(CALENDAR_ID), gcal_edit))
         end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
                       end_date=end_date,
-                      gcal_edit=gcal_edit,
-                      gcal_edit_old=gcal_edit_old)
+                      gcal_edit=gcal_edit)
         event.put()
 
         # execution has successfully completed
