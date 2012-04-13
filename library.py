@@ -22,7 +22,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
-from __future__ import with_statement  # Can axe once on 2.7
+from __future__ import with_statement
 import datetime
 import logging
 import os
@@ -166,8 +166,10 @@ def InitService(credentials=None):
   http = httplib2.Http()
   http = credentials.authorize(http)
 
-  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
-    cached_discovery_doc = fh.read()
+  # Can use with statement once on 2.7
+  fh = open(DISCOVERY_DOC_FILENAME, 'rU')
+  cached_discovery_doc = fh.read()
+  fh.close()
 
   return build_from_document(cached_discovery_doc,
                              DISCOVERY_URI,
