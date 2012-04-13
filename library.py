@@ -33,7 +33,8 @@ import traceback
 from urllib2 import urlopen
 
 # Third-party libraries
-from apiclient.discovery import build
+from apiclient.discovery import build_from_document
+from apiclient.discovery import DISCOVERY_URI
 from apiclient.errors import HttpError
 import httplib2
 from icalendar import Calendar
@@ -56,11 +57,6 @@ from secret_key import CLIENT_SECRET
 from secret_key import DEVELOPER_KEY
 
 
-## TEMP IMPORT
-from urllib import quote
-## TEMP IMPORT
-
-
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
 CREDENTIALS_FILENAME = 'calendar.dat'
 RESPONSES = {1: ['once a week', 'week'],
@@ -72,6 +68,7 @@ RESPONSES = {1: ['once a week', 'week'],
 PATH_TO_500_TEMPLATE = os.path.join(os.path.dirname(__file__),
                                     'templates', '500.html')
 RENDERED_500_PAGE = template.render(PATH_TO_500_TEMPLATE, {})
+DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 
 
 class Error(Exception):
@@ -167,8 +164,14 @@ def InitService(credentials=None):
 
   http = httplib2.Http()
   http = credentials.authorize(http)
-  return build(serviceName='calendar', version='v3',
-               http=http, developerKey=DEVELOPER_KEY)
+
+  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
+    cached_discovery_doc = fh.read()
+
+  return build_from_document(cached_discovery_doc,
+                             DISCOVERY_URI,
+                             http=http,
+                             developerKey=DEVELOPER_KEY)
 
 
 def ConvertToInterval(timestamp):
