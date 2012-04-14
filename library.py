@@ -22,7 +22,6 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
-from __future__ import with_statement
 import datetime
 import logging
 import os
