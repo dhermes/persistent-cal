@@ -29,6 +29,8 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.ext.webapp import WSGIApplication
 
 # App specific libraries
+from library import CheckCalendarDiscoveryDoc
+from library import CheckFutureFeaturesDoc
 from library import ConvertToInterval
 from library import ExtendedHandler
 from library import InitCredentials
@@ -65,6 +67,17 @@ class MainHandler(ExtendedHandler):
                                 CREDENTIALS, defer_now=True)
 
 
+class CheckDiscoveryDoc(ExtendedHandler):
+
+  def get(self):
+    """Updates once a month."""
+    if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
+      return
+
+    CheckCalendarDiscoveryDoc()
+    CheckFutureFeaturesDoc()
+
+
 class CleanupHandler(ExtendedHandler):
 
   def get(self):
@@ -78,6 +91,7 @@ class CleanupHandler(ExtendedHandler):
 
 application = WSGIApplication([
     ('/cron', MainHandler),
+    ('/cron-weekly', CheckDiscoveryDoc),
     ('/cron-monthly', CleanupHandler),
     ], debug=True)
 

@@ -69,6 +69,9 @@ PATH_TO_500_TEMPLATE = os.path.join(os.path.dirname(__file__),
                                     'templates', '500.html')
 RENDERED_500_PAGE = template.render(PATH_TO_500_TEMPLATE, {})
 DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
+DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
+FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
+                   'browse/apiclient/contrib/calendar/future.json')
 
 
 class Error(Exception):
@@ -471,6 +474,54 @@ def ParseEvent(event):
                 'location': location,
                 'description': description}
   return uid, event_data
+
+
+def RetrieveCalendarDiscoveryDoc(credentials=None):
+  if credentials is None:
+    credentials = InitCredentials()
+
+  http = httplib2.Http()
+  http = credentials.authorize(http)
+
+  requested_url = uritemplate.expand(DISCOVERY_URI, DISCOVERY_DOC_PARAMS)
+  resp, content = http.request(requested_url)
+
+  success = False
+  if resp.status < 400:
+    try:
+      service = simplejson.loads(content)
+      success = True
+    except ValueError:
+      pass
+
+  return success, content
+
+
+def CheckCalendarDiscoveryDoc(credentials=None):
+  success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
+      credentials=credentials)
+
+  if not success:
+    email_admins('Couldn\'t retrieve discovery doc.', defer_now=True)
+    return
+
+  # Can use with statement once on 2.7
+  fh = open(DISCOVERY_DOC_FILENAME, 'rU')
+  cached_discovery_doc = fh.read()
+  fh.close()
+
+  if cached_discovery_doc != current_discovery_doc:
+    email_admins('Current discovery doc disagrees with cached version.',
+                 defer_now=True)
+
+
+def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
+  http = httplib2.Http()
+  resp, _ = http.request(future_location)
+
+  if resp.status != 404:
+    email_admins('Future features JSON responded with %s.' % resp.status,
+                 defer_now=True)
 
 
 def MonthlyCleanup(relative_date, defer_now=False):
