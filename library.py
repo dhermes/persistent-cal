@@ -39,6 +39,7 @@ from apiclient.errors import HttpError
 import httplib2
 from icalendar import Calendar
 from oauth2client.file import Storage
+import uritemplate
 
 # App engine specific libraries
 from google.appengine.api import mail
