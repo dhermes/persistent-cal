@@ -43,12 +43,15 @@ import uritemplate
 
 # App engine specific libraries
 from google.appengine.api import mail
+from google.appengine.api import urlfetch
+from google.appengine.api import urlfetch_errors
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
 from google.appengine.ext.webapp import RequestHandler
 from google.appengine.ext.webapp import template
-from google.appengine.runtime import DeadlineExceededError
+from google.appengine import runtime
+
 
 # App specific libraries
 from admins import ADMINS_TO
@@ -73,6 +76,10 @@ DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
 FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
                    'browse/apiclient/contrib/calendar/future.json')
+
+
+# Global Setting
+urlfetch.set_default_fetch_deadline(60)
 
 
 class Error(Exception):
@@ -647,8 +654,8 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
 
   Loops through each subscription URL in links and calls UpdateSubscription for
   each URL. Keeps a list of upcoming events which will be updated by
-  UpdateUpcoming upon completion. If the application encounters a
-  DeadlineExceededError while the events are being processed, the function
+  UpdateUpcoming upon completion. If the application encounters one of the two
+  DeadlineExceededError's while the events are being processed, the function
   calls itself, but uses the upcoming, link_index and last_used_uid keyword
   arguments to save the current processing state.
 
@@ -685,7 +692,7 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
 
   # Set default values for link index and last used uid variables. These
   # are used to to pick up where the loop left off in case the task encounters
-  # a DeadlineExceededError.
+  # one of the DeadlineExceededError's.
   index = 0
   uid = None
 
@@ -706,7 +713,7 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
           logging.info('silently failed operation on %s from %s', uid, link)
           email_admins('silently failed operation on %s from %s' % (uid, link),
                        defer_now=True)
-  except DeadlineExceededError:
+  except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
     defer(UpdateUserSubscriptions, links, user_cal, credentials,
           upcoming=upcoming, link_index=index, last_used_uid=uid,
@@ -910,8 +917,8 @@ def deadline_decorator(method):
     """Returned function that uses method from outside scope.
 
     Tries to execute the method with the arguments. If either a
-    PermanentTaskFailure is thrown (from deferred library) or if
-    DeadlineExceededError is thrown (inherits directly from BaseException)
+    PermanentTaskFailure is thrown (from deferred library) or if one of the two
+    DeadlineExceededError's is thrown (inherits directly from BaseException)
     administrators are emailed and then cleanup occurs.
     """
     try:
@@ -919,10 +926,11 @@ def deadline_decorator(method):
     except PermanentTaskFailure:
       # In this case, the function can't be run, so we alert but do not
       # raise the error, returning a 200 status code, hence killing the task.
-      msg = 'Permanent failure attempting to execute task'
+      msg = 'Permanent failure attempting to execute task.'
       logging.exception(msg)
       email_admins(msg, defer_now=True)
-    except DeadlineExceededError:
+    except (runtime.DeadlineExceededError,
+            urlfetch_errors.DeadlineExceededError):
       traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
       logging.exception(traceback_info)
       email_admins(traceback_info, defer_now=True)
