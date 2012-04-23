@@ -335,18 +335,14 @@ def WhiteList(link):
   valid = False
   transformed = link
 
-  pattern_webcal = ('^webcal://www.tripit.com/feed/ical/private/'
-                    '[A-Za-z0-9-]+/tripit.ics$')
-  pattern_http = ('^http://www.tripit.com/feed/ical/private/'
-                  '[A-Za-z0-9-]+/tripit.ics$')
-  if re.match(pattern_webcal, link):
+  pattern_tripit = ('^((http|https|webcal)://|)www.tripit.com/feed/ical/'
+                    'private/[A-Za-z0-9-]+/tripit.ics$')
+  tripit_match = re.match(pattern_tripit, link)
+  if tripit_match is not None:
     valid = True
 
-    len_webcal = len('webcal')
-    transformed = 'http%s' % link[len_webcal:]
-  elif re.match(pattern_http, link):
-    valid = True
-    transformed = link
+    full_string, protocol = tripit_match.groups()
+    transformed = 'http://%s' % link.lstrip(full_string)
 
   return valid, transformed
 
