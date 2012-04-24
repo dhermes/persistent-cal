@@ -342,7 +342,7 @@ def WhiteList(link):
     valid = True
 
     full_string, protocol = tripit_match.groups()
-    transformed = 'http://%s' % link.lstrip(full_string)
+    transformed = 'http://%s' % link[len(full_string):]
 
   return valid, transformed
 
