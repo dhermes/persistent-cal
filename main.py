@@ -25,13 +25,11 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 import datetime
 import json
 import logging
-import os
 
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import deferred
 from google.appengine.ext import webapp
-from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
 
 # App specific libraries
@@ -82,12 +80,10 @@ class MainHandler(ExtendedHandler):
                          update_intervals=[base_interval])
       user_cal.put()
 
-    template_vals = {'id': current_user.email(),
-                     'calendars': json.dumps(user_cal.calendars),
-                     'frequency': UpdateString(user_cal.update_intervals)}
-
-    path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
-    self.response.out.write(template.render(path, template_vals))
+    self.render_response('index.html',
+                         id=current_user.email(),
+                         calendars=json.dumps(user_cal.calendars),
+                         frequency=UpdateString(user_cal.update_intervals))
 
 
 class AddSubscription(ExtendedHandler):
@@ -251,9 +247,7 @@ class OwnershipVerifyHandler(ExtendedHandler):
 
   def get(self):
     """Serves a static HTML file with verification data."""
-    path = os.path.join(os.path.dirname(__file__),
-                        'googlef7560eebc24762bb.html')
-    self.response.out.write(template.render(path, {}))
+    self.render_response('googlef7560eebc24762bb.html')
 
 
 class AboutHandler(ExtendedHandler):
@@ -261,8 +255,7 @@ class AboutHandler(ExtendedHandler):
 
   def get(self):
     """Serves a static HTML file with an about page."""
-    path = os.path.join(os.path.dirname(__file__), 'templates', 'about.html')
-    self.response.out.write(template.render(path, {}))
+    self.render_response('about.html')
 
 
 class AboutRedirect(ExtendedHandler):
@@ -279,8 +272,7 @@ class Throw404(ExtendedHandler):
   def get(self):
     """Serves a static HTML file with a 404 page."""
     self.error(404)
-    path = os.path.join(os.path.dirname(__file__), 'templates', '404.html')
-    self.response.out.write(template.render(path, {}))
+    self.render_response('404.html')
 
 
 application = webapp.WSGIApplication([

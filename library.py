@@ -25,7 +25,6 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 import datetime
 import json
 import logging
-import os
 import re
 import sys
 from time import sleep
@@ -48,9 +47,9 @@ from google.appengine.api import urlfetch_errors
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
-from google.appengine.ext.webapp import RequestHandler
-from google.appengine.ext.webapp import template
+from google.appengine.ext import webapp
 from google.appengine import runtime
+from webapp2_extras import jinja2
 
 
 # App specific libraries
@@ -69,9 +68,11 @@ RESPONSES = {1: ['once a week', 'week'],
              14: ['twice a day', 'half-day'],
              28: ['every six hours', 'six-hrs'],
              56: ['every three hours', 'three-hrs']}
-PATH_TO_500_TEMPLATE = os.path.join(os.path.dirname(__file__),
-                                    'templates', '500.html')
-RENDERED_500_PAGE = template.render(PATH_TO_500_TEMPLATE, {})
+# Without using the kwarg 'app' in get_jinja2, webapp2.get_app() is
+# used, which returns the active app instance.
+# [Reference: http://webapp-improved.appspot.com/api/webapp2.html]
+JINJA2_RENDERER = jinja2.get_jinja2()
+RENDERED_500_PAGE = JINJA2_RENDERER.render_template('500.html')
 DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
 FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
@@ -890,9 +891,7 @@ def email_admins(error_msg, defer_now=False):
 
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
   subject = 'Persistent Cal Error: Admin Notify'
-  email_path = os.path.join(os.path.dirname(__file__),
-                            'templates', 'error_notify.templ')
-  body = template.render(email_path, {'error': error_msg})
+  body = JINJA2_RENDERER.render_template('error_notify.templ', error=error_msg)
   mail.send_mail(sender=sender, to=ADMINS_TO,
                  subject=subject, body=body)
 
@@ -902,7 +901,7 @@ def deadline_decorator(method):
 
   Args:
     method: a callable object, expected to be a method of an object from
-        a class that inherits from RequestHandler
+        a class that inherits from webapp.RequestHandler
 
   Returns:
     A new function which calls {method}, catches certain errors
@@ -938,10 +937,10 @@ def deadline_decorator(method):
   return wrapped_method
 
 
-class ExtendedHandler(RequestHandler):
-  """A custom version of GAE RequestHandler.
+class ExtendedHandler(webapp.RequestHandler):
+  """A custom version of GAE webapp.RequestHandler.
 
-  This subclass of RequestHandler defines a handle_exception
+  This subclass of webapp.RequestHandler defines a handle_exception
   function that will email administrators when an exception
   occurs. In addition, the __new__ method is overridden
   to allow custom wrappers to be placed around the HTTP verbs
@@ -951,7 +950,7 @@ class ExtendedHandler(RequestHandler):
   def __new__(cls, *args, **kwargs):
     """Constructs the object.
 
-    This is explicitly intended for Google App Engine's RequestHandler.
+    This is explicitly intended for Google App Engine's webapp.RequestHandler.
     Requests only suport 7 of the 9 HTTP verbs, 4 of which we will
     decorate: get, post, put and delete. The other three supported
     (head, options, trace) may be added at a later time.
@@ -969,6 +968,14 @@ class ExtendedHandler(RequestHandler):
         setattr(cls, verb, deadline_decorator(method))
 
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
+
+  @webapp.cached_property
+  def jinja2(self):
+    return jinja2.get_jinja2(app=self.app)
+
+  def render_response(self, _template, **context):
+    rendered_value = self.jinja2.render_template(_template, **context)
+    self.response.write(rendered_value)
 
   def handle_exception(self, exception, debug_mode):
     """Custom handler for all GAE errors that inherit from Exception.

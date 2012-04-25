@@ -44,3 +44,7 @@ builtins:
 - remote_api: on
 # for deferring cron requests to task queue
 - deferred: on
+
+libraries:
+- name: jinja2
+  version: "2.6"
