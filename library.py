@@ -23,10 +23,10 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
+import json
 import logging
 import os
 import re
-import simplejson
 import sys
 from time import sleep
 import traceback
@@ -99,7 +99,7 @@ class CredentialsLoadError(Error):
 
 
 def JsonAscii(obj):
-  """Calls simplejson.dumps with ensure_ascii explicitly set to True.
+  """Calls json.dumps with ensure_ascii explicitly set to True.
 
   Args:
     obj: any object that can be turned into json
@@ -109,7 +109,7 @@ def JsonAscii(obj):
         ascii characters (this is because we use it to store certain
         objects in mdoels.Event.event_data as a TextProperty)
   """
-  return simplejson.dumps(obj, ensure_ascii=True)
+  return json.dumps(obj, ensure_ascii=True)
 
 
 def UpdateString(update_intervals):
@@ -132,7 +132,7 @@ def UpdateString(update_intervals):
   if length not in RESPONSES:
     raise BadInterval(length)
   else:
-    return simplejson.dumps(RESPONSES[length])
+    return json.dumps(RESPONSES[length])
 
 
 def InitCredentials(filename=CREDENTIALS_FILENAME):
@@ -493,7 +493,7 @@ def RetrieveCalendarDiscoveryDoc(credentials=None):
   success = False
   if resp.status < 400:
     try:
-      service = simplejson.loads(content)
+      service = json.loads(content)
       success = True
     except ValueError:
       pass
@@ -609,7 +609,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
     for uid in set(user_cal.upcoming).difference(upcoming):
       event = Event.get_by_key_name(uid)
       # pylint:disable-msg=E1103
-      event_data = simplejson.loads(event.event_data)
+      event_data = json.loads(event.event_data)
       if TimeToDTStamp(event_data['when:to']) > now:
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103

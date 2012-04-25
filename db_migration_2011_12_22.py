@@ -45,7 +45,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
-import simplejson
+import json
 
 # App engine specific libraries
 from google.appengine.ext import db
@@ -78,7 +78,7 @@ def StringToDayString(time_as_str):
 def UpdateEvents():
   events = Event.all()
   for event in events:
-    event_data = simplejson.loads(event.event_data)
+    event_data = json.loads(event.event_data)
 
     # removing email, irrelevant
     event_data.pop('email', None)

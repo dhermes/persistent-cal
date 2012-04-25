@@ -23,9 +23,9 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
+import json
 import logging
 import os
-import simplejson
 
 # App engine specific libraries
 from google.appengine.api import users
@@ -83,7 +83,7 @@ class MainHandler(ExtendedHandler):
       user_cal.put()
 
     template_vals = {'id': current_user.email(),
-                     'calendars': simplejson.dumps(user_cal.calendars),
+                     'calendars': json.dumps(user_cal.calendars),
                      'frequency': UpdateString(user_cal.update_intervals)}
 
     path = os.path.join(os.path.dirname(__file__), 'templates', 'index.html')
@@ -117,14 +117,14 @@ class AddSubscription(ExtendedHandler):
     link = self.request.get('calendar-link', '').strip()
     valid, _ = WhiteList(link)
     if not valid:
-      self.response.out.write(simplejson.dumps('whitelist:fail'))
+      self.response.out.write(json.dumps('whitelist:fail'))
       logging.info('whitelist:fail')
       return
 
     # TODO(dhermes): Make sure self.request.referrer is safe
     current_user = users.get_current_user()
     if current_user is None:
-      self.response.out.write(simplejson.dumps('no_user:fail'))
+      self.response.out.write(json.dumps('no_user:fail'))
       logging.info('no_user:fail')
       return
 
@@ -141,7 +141,7 @@ class AddSubscription(ExtendedHandler):
       else:
         # link must be in user_cal.calendars already
         msg = 'contained:fail'
-      self.response.out.write(simplejson.dumps(msg))
+      self.response.out.write(json.dumps(msg))
       logging.info(msg)
       return
 
@@ -158,7 +158,7 @@ class AddSubscription(ExtendedHandler):
     #               make sure all events that are added to GCal are also added
     #               to the datastore.
     UpdateUserSubscriptions([link], user_cal, CREDENTIALS, defer_now=True)
-    self.response.out.write(simplejson.dumps(user_cal.calendars))
+    self.response.out.write(json.dumps(user_cal.calendars))
 
 
 class ChangeFrequency(ExtendedHandler):
@@ -182,7 +182,7 @@ class ChangeFrequency(ExtendedHandler):
     # Make sure change has been requested by a user before doing any work
     current_user = users.get_current_user()
     if current_user is None:
-      self.response.out.write(simplejson.dumps('no_user:fail'))
+      self.response.out.write(json.dumps('no_user:fail'))
       logging.info('no_user:fail')
       return
 
@@ -206,7 +206,7 @@ class ChangeFrequency(ExtendedHandler):
         msg = 'no_cal:fail'
       else:
         msg = 'wrong_freq:fail'
-      self.response.out.write(simplejson.dumps(msg))
+      self.response.out.write(json.dumps(msg))
       logging.info(msg)
       return
 
@@ -218,18 +218,18 @@ class GetInfoHandler(ExtendedHandler):
     """Handles get requests to /getinfo."""
     current_user = users.get_current_user()
     if current_user is None:
-      self.response.out.write(simplejson.dumps('no_user:fail'))
+      self.response.out.write(json.dumps('no_user:fail'))
       logging.info('no_user:fail')
       return
 
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if user_cal is None:
-      self.response.out.write(simplejson.dumps('no_cal:fail'))
+      self.response.out.write(json.dumps('no_cal:fail'))
       logging.info('no_cal:fail')
       return
 
-    freq_data = simplejson.loads(UpdateString(user_cal.update_intervals))
-    user_info = simplejson.dumps((user_cal.calendars, freq_data[0]))
+    freq_data = json.loads(UpdateString(user_cal.update_intervals))
+    user_info = json.dumps((user_cal.calendars, freq_data[0]))
     self.response.out.write(user_info)
 
 
@@ -265,6 +265,14 @@ class AboutHandler(ExtendedHandler):
     self.response.out.write(template.render(path, {}))
 
 
+class AboutRedirect(ExtendedHandler):
+  """Redirects to the correct about page."""
+
+  def get(self):
+    """Redirects to /about."""
+    self.redirect('/about')
+
+
 class Throw404(ExtendedHandler):
   """Catches all non-specified (404) requests."""
 
@@ -283,5 +291,6 @@ application = webapp.WSGIApplication([
     ('/getinfo', GetInfoHandler),
     ('/googlef7560eebc24762bb.html', OwnershipVerifyHandler),
     ('/about', AboutHandler),
+    ('/about.html', AboutRedirect),
     ('/.*', Throw404),
     ], debug=True)

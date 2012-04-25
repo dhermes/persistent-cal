@@ -27,7 +27,7 @@ from google.appengine.ext import db
 class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
-  event_data = db.TextProperty(required=True)  # python dict as simplejson
+  event_data = db.TextProperty(required=True)  # python dict as json
   end_date = db.StringProperty(required=True)
   # plan to delete this and move into event_data as 'event_id' key
   gcal_edit = db.StringProperty(required=True)

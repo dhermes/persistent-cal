@@ -22,7 +22,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
-import simplejson
+import json
 
 # Third-party libraries
 import gdata.calendar.client
@@ -96,7 +96,7 @@ def main():
                            'who': who}
 
   with open('curr_state_cal.json', 'wb') as fh:
-    simplejson.dump(result, fh)
+    json.dump(result, fh)
 
 if __name__ == '__main__':
   main()
