@@ -55,9 +55,7 @@ from webapp2_extras import jinja2
 # App specific libraries
 from admins import ADMINS_TO
 from models import Event
-from secret_key import CLIENT_ID
-from secret_key import CLIENT_SECRET
-from secret_key import DEVELOPER_KEY
+import secret_key
 
 
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
@@ -146,11 +144,11 @@ def InitCredentials(filename=CREDENTIALS_FILENAME):
   Returns:
     An OAuth2Credentials object.
   """
-  storage = Storage(CREDENTIALS_FILENAME)
+  storage = Storage(filename)
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
-    email_admins('Credentials in calendar resource not good.', defer_now=True)
+    EmailAdmins('Credentials in calendar resource not good.', defer_now=True)
     raise CredentialsLoadError('No credentials retrieved from calendar.dat')
 
   return credentials
@@ -177,15 +175,13 @@ def InitService(credentials=None):
   http = httplib2.Http()
   http = credentials.authorize(http)
 
-  # Can use with statement once on 2.7
-  fh = open(DISCOVERY_DOC_FILENAME, 'rU')
-  cached_discovery_doc = fh.read()
-  fh.close()
+  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
+    cached_discovery_doc = fh.read()
 
   return build_from_document(cached_discovery_doc,
                              DISCOVERY_URI,
                              http=http,
-                             developerKey=DEVELOPER_KEY)
+                             developerKey=secret_key.DEVELOPER_KEY)
 
 
 def ConvertToInterval(timestamp):
@@ -336,14 +332,14 @@ def WhiteList(link):
   valid = False
   transformed = link
 
-  pattern_tripit = ('^((http|https|webcal)://|)www.tripit.com/feed/ical/'
-                    'private/[A-Za-z0-9-]+/tripit.ics$')
+  pattern_tripit = ('^(?P<protocol>(http|https|webcal)://|)www.tripit.com/feed/'
+                    'ical/private/[A-Za-z0-9-]+/tripit.ics$')
   tripit_match = re.match(pattern_tripit, link)
   if tripit_match is not None:
     valid = True
 
-    full_string, protocol = tripit_match.groups()
-    transformed = 'http://%s' % link[len(full_string):]
+    protocol = tripit_match.group('protocol')
+    transformed = 'http://%s' % link[len(protocol):]
 
   return valid, transformed
 
@@ -398,6 +394,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
     if push_update:
       while attempts:
         try:
+          # pylint:disable-msg=E1101
           updated_event = service.events().update(calendarId=CALENDAR_ID,
                                                   eventId=event['id'],
                                                   body=event).execute()
@@ -419,6 +416,7 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
     new_event = None
     while attempts:
       try:
+        # pylint:disable-msg=E1101
         new_event = service.events().insert(calendarId=CALENDAR_ID,
                                             body=event).execute()
         logging.info('%s was inserted', new_event['id'])
@@ -482,6 +480,18 @@ def ParseEvent(event):
 
 
 def RetrieveCalendarDiscoveryDoc(credentials=None):
+  """Retrieves the discovery doc for the calendar API service.
+
+  Args:
+    credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is None, attempt to get credentials from
+        calendar.dat file.
+
+  Returns:
+    A tuple (success, content) where success is a boolean describing if the doc
+        was retrieved successfully and content (if success) contains the JSON
+        string contents of the discovery doc
+  """
   if credentials is None:
     credentials = InitCredentials()
 
@@ -494,7 +504,7 @@ def RetrieveCalendarDiscoveryDoc(credentials=None):
   success = False
   if resp.status < 400:
     try:
-      service = json.loads(content)
+      json.loads(content)
       success = True
     except ValueError:
       pass
@@ -503,29 +513,45 @@ def RetrieveCalendarDiscoveryDoc(credentials=None):
 
 
 def CheckCalendarDiscoveryDoc(credentials=None):
+  """Checks a cached discovery doc against the current doc for calendar service.
+
+  If the discovery can't be retrieved or the cached copy disagrees with the
+  current version, an email is sent to the administrators.
+
+  Args:
+    credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is None, attempt to get credentials from
+        calendar.dat file.
+  """
   success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
       credentials=credentials)
 
   if not success:
-    email_admins('Couldn\'t retrieve discovery doc.', defer_now=True)
+    EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
     return
 
-  # Can use with statement once on 2.7
-  fh = open(DISCOVERY_DOC_FILENAME, 'rU')
-  cached_discovery_doc = fh.read()
-  fh.close()
+  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
+    cached_discovery_doc = fh.read()
 
   if cached_discovery_doc != current_discovery_doc:
-    email_admins('Current discovery doc disagrees with cached version.',
+    EmailAdmins('Current discovery doc disagrees with cached version.',
                  defer_now=True)
 
 
 def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
+  """Checks if a future features doc for the calendar service exists.
+
+  If a future features doc is detected, an email is sent to the administrators.
+
+  Args:
+    future_location: A string URL where the future features doc would reside if
+        it existed. This defaults to the constant FUTURE_LOCATION.
+  """
   http = httplib2.Http()
   resp, _ = http.request(future_location)
 
   if resp.status != 404:
-    email_admins('Future features JSON responded with %s.' % resp.status,
+    EmailAdmins('Future features JSON responded with %s.' % resp.status,
                  defer_now=True)
 
 
@@ -571,7 +597,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
                                                              today)
     logging.info(msg)
-    email_admins(msg, defer_now=True)
+    EmailAdmins(msg, defer_now=True)
     return
 
   prior_date_as_str = FormatTime(prior_date)
@@ -614,17 +640,17 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
       if TimeToDTStamp(event_data['when:to']) > now:
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103
-          # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1101
           service.events().delete(calendarId=CALENDAR_ID,
                                   eventId=event.gcal_edit).execute()
-          # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1101
           logging.info('%s deleted', event.gcal_edit)
           event.delete()  # pylint:disable-msg=E1103
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
-          # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1101
           cal_event = service.events().get(calendarId=CALENDAR_ID,
                                            eventId=event.gcal_edit).execute()
           # Filter out this user from the event attendees
@@ -636,6 +662,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
               if attendee_dict['email'] != user_cal.owner.email()
           ]
 
+          # pylint:disable-msg=E1101
           service.events().update(calendarId=CALENDAR_ID,
                                   eventId=cal_event['id'],
                                   body=cal_event).execute()
@@ -645,6 +672,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
     user_cal.put()
 
 
+# pylint:disable-msg=R0913
 def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
                             link_index=0, last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
@@ -681,8 +709,6 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
           last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
 
-  service = InitService(credentials)
-
   if link_index > 0:
     links = links[link_index:]
   upcoming = [] if upcoming is None else upcoming
@@ -708,7 +734,7 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
           upcoming.append(uid)
         elif failed:
           logging.info('silently failed operation on %s from %s', uid, link)
-          email_admins('silently failed operation on %s from %s' % (uid, link),
+          EmailAdmins('silently failed operation on %s from %s' % (uid, link),
                        defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
@@ -770,7 +796,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
       msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
       logging.info(msg)
       if component.name != 'VCALENDAR':
-        email_admins(msg, defer_now=True)
+        EmailAdmins(msg, defer_now=True)
     else:
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
@@ -805,7 +831,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           cal_event = None
           while attempts:
             try:
-              # pylint:disable-msg=E1103
+              # pylint:disable-msg=E1101,E1103
               cal_event = service.events().get(
                   calendarId=CALENDAR_ID, eventId=event.gcal_edit).execute()
               # pylint:disable-msg=E1103
@@ -847,6 +873,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           attempts = 3
           while attempts:
             try:
+              # pylint:disable-msg=E1101
               service.events().update(calendarId=CALENDAR_ID,
                                       eventId=cal_event['id'],
                                       body=cal_event).execute()
@@ -874,7 +901,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 ############# Handler class helper #############
 ################################################
 
-def email_admins(error_msg, defer_now=False):
+def EmailAdmins(error_msg, defer_now=False):
   """Sends email to admins with the preferred message, with option to defer.
 
   Uses the template error_notify.templ to generate an email with the {error_msg}
@@ -886,7 +913,7 @@ def email_admins(error_msg, defer_now=False):
         default this is False.
   """
   if defer_now:
-    defer(email_admins, error_msg, defer_now=False, _url='/workers')
+    defer(EmailAdmins, error_msg, defer_now=False, _url='/workers')
     return
 
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
@@ -896,7 +923,7 @@ def email_admins(error_msg, defer_now=False):
                  subject=subject, body=body)
 
 
-def deadline_decorator(method):
+def DeadlineDecorator(method):
   """Decorator for HTTP verbs to handle GAE timeout.
 
   Args:
@@ -908,7 +935,7 @@ def deadline_decorator(method):
         and responds to them gracefully
   """
 
-  def wrapped_method(self, *args, **kwargs):
+  def WrappedMethod(self, *args, **kwargs):  # pylint:disable-msg=W0142
     """Returned function that uses method from outside scope.
 
     Tries to execute the method with the arguments. If either a
@@ -923,18 +950,19 @@ def deadline_decorator(method):
       # raise the error, returning a 200 status code, hence killing the task.
       msg = 'Permanent failure attempting to execute task.'
       logging.exception(msg)
-      email_admins(msg, defer_now=True)
+      EmailAdmins(msg, defer_now=True)
     except (runtime.DeadlineExceededError,
             urlfetch_errors.DeadlineExceededError):
+      # pylint:disable-msg=W0142
       traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
       logging.exception(traceback_info)
-      email_admins(traceback_info, defer_now=True)
+      EmailAdmins(traceback_info, defer_now=True)
 
       self.response.clear()
       self.response.set_status(500)
       self.response.out.write(RENDERED_500_PAGE)
 
-  return wrapped_method
+  return WrappedMethod
 
 
 class ExtendedHandler(webapp.RequestHandler):
@@ -947,7 +975,7 @@ class ExtendedHandler(webapp.RequestHandler):
   before an instance is created.
   """
 
-  def __new__(cls, *args, **kwargs):
+  def __new__(cls, *args, **kwargs):  # pylint:disable-msg=W0142
     """Constructs the object.
 
     This is explicitly intended for Google App Engine's webapp.RequestHandler.
@@ -965,18 +993,26 @@ class ExtendedHandler(webapp.RequestHandler):
     for verb in verbs:
       method = getattr(cls, verb, None)
       if callable(method):
-        setattr(cls, verb, deadline_decorator(method))
+        setattr(cls, verb, DeadlineDecorator(method))
 
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
 
   @webapp.cached_property
-  def jinja2(self):
+  def Jinja2(self):
+    """Cached property holding a Jinja2 instance."""
     return jinja2.get_jinja2(app=self.app)
 
-  def render_response(self, _template, **context):
-    rendered_value = self.jinja2.render_template(_template, **context)
+  def RenderResponse(self, template, **context):  # pylint:disable-msg=W0142
+    """Use Jinja2 instance to render template and write to output.
+
+    Args:
+      template: filename (relative to ~/templates) that we are rendering
+      context: keyword arguments corresponding to variables in template
+    """
+    rendered_value = self.Jinja2.render_template(template, **context)
     self.response.write(rendered_value)
 
+  # pylint:disable-msg=C0103,W0613
   def handle_exception(self, exception, debug_mode):
     """Custom handler for all GAE errors that inherit from Exception.
 
@@ -986,7 +1022,7 @@ class ExtendedHandler(webapp.RequestHandler):
     """
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
     logging.exception(traceback_info)
-    email_admins(traceback_info, defer_now=True)
+    EmailAdmins(traceback_info, defer_now=True)
 
     self.response.clear()
     self.response.set_status(500)

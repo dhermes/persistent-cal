@@ -57,7 +57,7 @@ class MainHandler(ExtendedHandler):
   """Handles get requests to /; provides a UI for managing subscribed feeds."""
 
   @login_required
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Main UI for persistent-cal.
 
     If a user is not logged in, login_required will force them to log in before
@@ -80,16 +80,17 @@ class MainHandler(ExtendedHandler):
                          update_intervals=[base_interval])
       user_cal.put()
 
-    self.render_response('index.html',
-                         id=current_user.email(),
-                         calendars=json.dumps(user_cal.calendars),
-                         frequency=UpdateString(user_cal.update_intervals))
+    # pylint:disable-msg=E1103
+    self.RenderResponse('index.html',
+                        id=current_user.email(),
+                        calendars=json.dumps(user_cal.calendars),
+                        frequency=UpdateString(user_cal.update_intervals))
 
 
 class AddSubscription(ExtendedHandler):
   """Handles post requests to /add and will change add a user calendar feed."""
 
-  def post(self):
+  def post(self):  # pylint:disable-msg=C0103
     """Handles post requests to /add.
 
     First validates the calendar-link from the post request against a whitelist
@@ -130,9 +131,9 @@ class AddSubscription(ExtendedHandler):
                          owner=current_user,
                          calendars=[link])
     elif link not in user_cal.calendars and len(user_cal.calendars) < 4:
-      user_cal.calendars.append(link)
+      user_cal.calendars.append(link)  # pylint:disable-msg=E1103
     else:
-      if len(user_cal.calendars) >= 4:
+      if len(user_cal.calendars) >= 4:  # pylint:disable-msg=E1103
         msg = 'limit:fail'
       else:
         # link must be in user_cal.calendars already
@@ -141,9 +142,9 @@ class AddSubscription(ExtendedHandler):
       logging.info(msg)
       return
 
-    user_cal.put()
+    user_cal.put()  # pylint:disable-msg=E1103
 
-    global CREDENTIALS
+    global CREDENTIALS  # pylint:disable-msg=W0603
     if CREDENTIALS is None:
       logging.info('Credentials initialized')
       CREDENTIALS = InitCredentials()
@@ -154,13 +155,14 @@ class AddSubscription(ExtendedHandler):
     #               make sure all events that are added to GCal are also added
     #               to the datastore.
     UpdateUserSubscriptions([link], user_cal, CREDENTIALS, defer_now=True)
+    # pylint:disable-msg=E1103
     self.response.out.write(json.dumps(user_cal.calendars))
 
 
 class ChangeFrequency(ExtendedHandler):
   """Handles put requests to /freq and will change frequency for a user."""
 
-  def put(self):
+  def put(self):  # pylint:disable-msg=C0103
     """Handles put requests to /freq.
 
     Validates the user, the user calendar, and the frequency value from the
@@ -186,16 +188,16 @@ class ChangeFrequency(ExtendedHandler):
 
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if frequency in FREQUENCIES and user_cal is not None:
-      if user_cal.update_intervals:
-        base_interval = user_cal.update_intervals[0]
+      if user_cal.update_intervals:  # pylint:disable-msg=E1103
+        base_interval = user_cal.update_intervals[0]  # pylint:disable-msg=E1103
       else:
         base_interval = ConvertToInterval(datetime.datetime.utcnow())
 
-      update_intervals = [(base_interval + val) % 56
-                          for val in FREQUENCIES[frequency]]
+      update_intervals = [(base_interval + delta_val) % 56
+                          for delta_val in FREQUENCIES[frequency]]
 
       user_cal.update_intervals = update_intervals
-      user_cal.put()
+      user_cal.put()  # pylint:disable-msg=E1103
       self.response.out.write(UpdateString(update_intervals))
     else:
       if user_cal is None:
@@ -210,7 +212,7 @@ class ChangeFrequency(ExtendedHandler):
 class GetInfoHandler(ExtendedHandler):
   """Handles get requests to /getinfo and returns calendar & frequency info."""
 
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Handles get requests to /getinfo."""
     current_user = users.get_current_user()
     if current_user is None:
@@ -224,6 +226,7 @@ class GetInfoHandler(ExtendedHandler):
       logging.info('no_cal:fail')
       return
 
+    # pylint:disable-msg=E1103
     freq_data = json.loads(UpdateString(user_cal.update_intervals))
     user_info = json.dumps((user_cal.calendars, freq_data[0]))
     self.response.out.write(user_info)
@@ -232,7 +235,7 @@ class GetInfoHandler(ExtendedHandler):
 class DeferredHandler(deferred.TaskHandler, ExtendedHandler):
   """A webapp handler class that processes deferred invocations."""
 
-  def post(self):
+  def post(self):  # pylint:disable-msg=C0103
     """Custom post handler for deferred queue.
 
     Uses the run_from_request method from deferred.TaskHandler to attempt to run
@@ -245,23 +248,23 @@ class DeferredHandler(deferred.TaskHandler, ExtendedHandler):
 class OwnershipVerifyHandler(ExtendedHandler):
   """Handles / as well as redirects for login required."""
 
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Serves a static HTML file with verification data."""
-    self.render_response('googlef7560eebc24762bb.html')
+    self.RenderResponse('googlef7560eebc24762bb.html')
 
 
 class AboutHandler(ExtendedHandler):
   """Serves the static about page."""
 
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Serves a static HTML file with an about page."""
-    self.render_response('about.html')
+    self.RenderResponse('about.html')
 
 
 class AboutRedirect(ExtendedHandler):
   """Redirects to the correct about page."""
 
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Redirects to /about."""
     self.redirect('/about')
 
@@ -269,13 +272,13 @@ class AboutRedirect(ExtendedHandler):
 class Throw404(ExtendedHandler):
   """Catches all non-specified (404) requests."""
 
-  def get(self):
+  def get(self):  # pylint:disable-msg=C0103
     """Serves a static HTML file with a 404 page."""
     self.error(404)
-    self.render_response('404.html')
+    self.RenderResponse('404.html')
 
 
-application = webapp.WSGIApplication([
+APPLICATION = webapp.WSGIApplication([
     ('/', MainHandler),
     ('/workers', DeferredHandler),
     ('/add', AddSubscription),

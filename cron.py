@@ -39,8 +39,13 @@ from models import UserCal
 
 
 class MainHandler(ExtendedHandler):
+  """Handles cron requests to /cron.
 
-  def get(self):
+  This handler carries out updates for any user scheduled to get an update
+  during that update interval.
+  """
+
+  def get(self):  # pylint:disable-msg=C0103
     """Updates every three hours."""
     # ('http://code.google.com/appengine/docs/python/tools/webapp/'
     #  'requestclass.html#Request_headers')
@@ -53,22 +58,27 @@ class MainHandler(ExtendedHandler):
 
     now = datetime.datetime.utcnow()
     now_interval = ConvertToInterval(now)
-    CREDENTIALS = None
+    credentials = None
 
     # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
-    #               that all_users becomes to big to set off background tasks
+    #               that all_users becomes too big to set off background tasks
     all_users = UserCal.all()
     for user_cal in all_users:
       if now_interval in user_cal.update_intervals:
-        if CREDENTIALS is None:
-          CREDENTIALS = InitCredentials()
+        if credentials is None:
+          credentials = InitCredentials()
         UpdateUserSubscriptions(user_cal.calendars, user_cal,
-                                CREDENTIALS, defer_now=True)
+                                credentials, defer_now=True)
 
 
 class CheckDiscoveryDoc(ExtendedHandler):
+  """Handles cron requests to /cron-weekly.
 
-  def get(self):
+  Checks that the cached discovery doc is up to date and checks if a
+  future features doc has been added.
+  """
+
+  def get(self):  # pylint:disable-msg=C0103
     """Updates once a month."""
     if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
       return
@@ -78,8 +88,12 @@ class CheckDiscoveryDoc(ExtendedHandler):
 
 
 class CleanupHandler(ExtendedHandler):
+  """Handles cron requests to /cron-monthly.
 
-  def get(self):
+  Cleans up any events older than three months by using MonthlyCleanup.
+  """
+
+  def get(self):  # pylint:disable-msg=C0103
     """Updates once a month."""
     if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
       return
@@ -88,7 +102,7 @@ class CleanupHandler(ExtendedHandler):
     MonthlyCleanup(now.date(), defer_now=True)
 
 
-application = webapp.WSGIApplication([
+APPLICATION = webapp.WSGIApplication([
     ('/cron', MainHandler),
     ('/cron-weekly', CheckDiscoveryDoc),
     ('/cron-monthly', CleanupHandler),

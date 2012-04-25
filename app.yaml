@@ -21,23 +21,23 @@ handlers:
   mime_type: "text/plain"
 
 - url: /cron
-  script: cron.application
+  script: cron.APPLICATION
   login: admin
 
 - url: /cron-weekly
-  script: cron.application
+  script: cron.APPLICATION
   login: admin
 
 - url: /cron-monthly
-  script: cron.application
+  script: cron.APPLICATION
   login: admin
 
 - url: /workers
-  script: main.application
+  script: main.APPLICATION
   login: admin
 
 - url: /.*
-  script: main.application
+  script: main.APPLICATION
 
 builtins:
 # for remote datastore calls
