@@ -106,7 +106,7 @@ def JsonAscii(obj):
   Returns:
     A JSON representation of obj that is guaranteed to contain only
         ascii characters (this is because we use it to store certain
-        objects in mdoels.Event.event_data as a TextProperty)
+        objects in models.Event.event_data as a TextProperty)
   """
   return json.dumps(obj, ensure_ascii=True)
 
@@ -328,7 +328,7 @@ def WhiteList(link):
         (possibly different) equivalent value of link which is used
         internally.
   """
-  # If we WhiteList is updated, ParseEvent must be as well
+  # If WhiteList is updated, ParseEvent must be as well
   valid = False
   transformed = link
 
@@ -366,27 +366,8 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
 
   update = True
   if event is None:
-    event = {}
+    event = event_data.copy()
     update = False
-
-  event['summary'] = event_data['summary']
-  event['description'] = event_data['description']
-
-  # Where
-  event['location'] = event_data['location']
-
-  # When
-  start = event_data['when:from']
-  if start.endswith('Z'):
-    event['start'] = {'dateTime': start}
-  else:
-    event['start'] = {'date': start}
-
-  end = event_data['when:to']
-  if end.endswith('Z'):
-    event['end'] = {'dateTime': end}
-  else:
-    event['end'] = {'date': end}
 
   if update:
     attempts = 3
@@ -471,8 +452,16 @@ def ParseEvent(event):
     # remove name from the description
     description = 'In %s %s' % (location, description.split(target)[1])
 
-  event_data = {'when:from': FormatTime(event.get('dtstart').dt),
-                'when:to': FormatTime(event.get('dtend').dt),
+  start_string = FormatTime(event.get('dtstart').dt)
+  start_keyword = 'dateTime' if start_string.endswith('Z') else 'date'
+  start = {start_keyword: start_string}
+
+  end_string = FormatTime(event.get('dtend').dt)
+  end_keyword = 'dateTime' if end_string.endswith('Z') else 'date'
+  end = {end_keyword: end_string}
+
+  event_data = {'start': start,
+                'end': end,
                 'summary': unicode(event.get('summary')),
                 'location': location,
                 'description': description}
@@ -637,7 +626,13 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
       event = Event.get_by_key_name(uid)
       # pylint:disable-msg=E1103
       event_data = json.loads(event.event_data)
-      if TimeToDTStamp(event_data['when:to']) > now:
+
+      if 'dateTime' in event_data['end']:
+        end_date = TimeToDTStamp(event_data['end']['dateTime'])
+      else:
+        end_date = TimeToDTStamp(event_data['end']['date'])
+
+      if end_date > now:
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103
           # pylint:disable-msg=E1101
@@ -810,8 +805,12 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           yield (uid, False, True)
           continue
 
+        if 'dateTime' in event_data['end']:
+          end_date = StringToDayString(event_data['end']['dateTime'])
+        else:
+          end_date = StringToDayString(event_data['end']['date'])
+
         gcal_edit = cal_event['id']
-        end_date = StringToDayString(event_data['when:to'])
         event = Event(key_name=uid,
                       who=[current_user_id],  # id is string
                       event_data=db.Text(JsonAscii(event_data)),
