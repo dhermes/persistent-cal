@@ -22,19 +22,17 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
-from cgi import parse_qs
-from datetime import datetime
+import datetime
 import logging
 import os
 import simplejson
 
 # App engine specific libraries
 from google.appengine.api import users
-from google.appengine.ext.deferred import TaskHandler
+from google.appengine.ext import deferred
+from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import login_required
-from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext.webapp import WSGIApplication
 
 # App specific libraries
 from library import ConvertToInterval
@@ -77,7 +75,7 @@ class MainHandler(ExtendedHandler):
     current_user = users.get_current_user()
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if user_cal is None:
-      base_interval = ConvertToInterval(datetime.utcnow())
+      base_interval = ConvertToInterval(datetime.datetime.utcnow())
       user_cal = UserCal(key_name=current_user.user_id(),
                          owner=current_user,
                          calendars=[],
@@ -188,19 +186,14 @@ class ChangeFrequency(ExtendedHandler):
       logging.info('no_user:fail')
       return
 
-    # PUT is broken in webob, self.request.get('frequency', None) won't work
-    # http://code.google.com/p/googleappengine/issues/detail?id=719
-    params = parse_qs(self.request.body)
-    frequency = None
-    if 'frequency' in params and len(params['frequency']) == 1:
-      frequency = params['frequency'][0]
+    frequency = self.request.get('frequency', None)
 
     user_cal = UserCal.get_by_key_name(current_user.user_id())
     if frequency in FREQUENCIES and user_cal is not None:
       if user_cal.update_intervals:
         base_interval = user_cal.update_intervals[0]
       else:
-        base_interval = ConvertToInterval(datetime.utcnow())
+        base_interval = ConvertToInterval(datetime.datetime.utcnow())
 
       update_intervals = [(base_interval + val) % 56
                           for val in FREQUENCIES[frequency]]
@@ -240,7 +233,7 @@ class GetInfoHandler(ExtendedHandler):
     self.response.out.write(user_info)
 
 
-class DeferredHandler(TaskHandler, ExtendedHandler):
+class DeferredHandler(deferred.TaskHandler, ExtendedHandler):
   """A webapp handler class that processes deferred invocations."""
 
   def post(self):
@@ -282,7 +275,7 @@ class Throw404(ExtendedHandler):
     self.response.out.write(template.render(path, {}))
 
 
-application = WSGIApplication([
+application = webapp.WSGIApplication([
     ('/', MainHandler),
     ('/workers', DeferredHandler),
     ('/add', AddSubscription),
@@ -292,11 +285,3 @@ application = WSGIApplication([
     ('/about', AboutHandler),
     ('/.*', Throw404),
     ], debug=True)
-
-
-def main():
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()

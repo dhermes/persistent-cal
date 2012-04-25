@@ -1,7 +1,8 @@
 application: persistent-cal
-version: 0-6
-runtime: python
-api_version: 1 # only existing version
+version: 0-7
+runtime: python27
+api_version: 1  # only existing version
+threadsafe: true  # for python27
 
 handlers:
 # precedence should be noted for any wildcards
@@ -20,23 +21,23 @@ handlers:
   mime_type: "text/plain"
 
 - url: /cron
-  script: cron.py
+  script: cron.application
   login: admin
 
 - url: /cron-weekly
-  script: cron.py
+  script: cron.application
   login: admin
 
 - url: /cron-monthly
-  script: cron.py
+  script: cron.application
   login: admin
 
 - url: /workers
-  script: main.py
+  script: main.application
   login: admin
 
 - url: /.*
-  script: main.py
+  script: main.application
 
 builtins:
 # for remote datastore calls

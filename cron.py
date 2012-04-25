@@ -22,11 +22,10 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
-from datetime import datetime
+import datetime
 
 # App engine specific libraries
-from google.appengine.ext.webapp.util import run_wsgi_app
-from google.appengine.ext.webapp import WSGIApplication
+from google.appengine.ext import webapp
 
 # App specific libraries
 from library import CheckCalendarDiscoveryDoc
@@ -52,7 +51,7 @@ class MainHandler(ExtendedHandler):
       # Don't run if not
       return
 
-    now = datetime.utcnow()
+    now = datetime.datetime.utcnow()
     now_interval = ConvertToInterval(now)
     CREDENTIALS = None
 
@@ -85,20 +84,12 @@ class CleanupHandler(ExtendedHandler):
     if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
       return
 
-    now = datetime.utcnow()
+    now = datetime.datetime.utcnow()
     MonthlyCleanup(now.date(), defer_now=True)
 
 
-application = WSGIApplication([
+application = webapp.WSGIApplication([
     ('/cron', MainHandler),
     ('/cron-weekly', CheckDiscoveryDoc),
     ('/cron-monthly', CleanupHandler),
     ], debug=True)
-
-
-def main():
-  run_wsgi_app(application)
-
-
-if __name__ == '__main__':
-  main()
