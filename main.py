@@ -33,13 +33,13 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import login_required
 
 # App specific libraries
-from library import ConvertToInterval
 from library import ExtendedHandler
 from library import InitCredentials
 from library import UpdateString
 from library import UpdateUserSubscriptions
 from library import WhiteList
 from models import UserCal
+from time_utils import ConvertToInterval
 
 
 CREDENTIALS = None

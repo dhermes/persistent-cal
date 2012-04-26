@@ -22,16 +22,28 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
+import datetime
 import json
 
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import db
 
+# App specific libraries
+import time_utils
+
 
 class TimeKeyword(db.Model):
   keyword = db.StringProperty(required=True)
   value = db.StringProperty(required=True)
+
+  @classmethod
+  def from_dict(cls, time_dict):
+    if not isinstance(time_dict, dict) or len(time_dict) != 1:
+      raise BadValueError('Requires a dictionary with a single key.')
+    key = time_dict.keys()[0]
+
+    return TimeKeyword(keyword=key, value=time_dict[key])
 
   def _as_dict(self):
     return {self.keyword: self.value}
@@ -64,7 +76,7 @@ class TimeKeywordProperty(db.Property):
   def validate(self, value):
     if value is not None and not isinstance(value, TimeKeyword):
       raise BadValueError('Property %s must be convertible '
-                          'to a TimeKeyword instance (%s)' %
+                          'to a TimeKeyword instance (%s).' %
                           (self.name, value))
     return super(TimeKeywordProperty, self).validate(value)
 
@@ -74,6 +86,8 @@ class TimeKeywordProperty(db.Property):
 
 class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
+  # grep -r who .
+  # db.to_dict(model_instance, dictionary=None):
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as json
   description = db.TextProperty(required=True)
@@ -82,8 +96,11 @@ class Event(db.Model):
   location = db.StringProperty(required=True)
   summary = db.StringProperty(required=True)
   attendees = db.ListProperty(users.User, required=True)
-  end_date = db.StringProperty(required=True)
   gcal_edit = db.StringProperty(required=True)
+
+  @db.ComputedProperty
+  def end_date(self):
+    return time_utils.StringToDayString(self.end.value)
 
   def _as_dict(self):
     attendees = [{'email': attendee.email()} for attendee in self.attendees]

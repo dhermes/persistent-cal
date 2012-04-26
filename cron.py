@@ -30,12 +30,12 @@ from google.appengine.ext import webapp
 # App specific libraries
 from library import CheckCalendarDiscoveryDoc
 from library import CheckFutureFeaturesDoc
-from library import ConvertToInterval
 from library import ExtendedHandler
 from library import InitCredentials
 from library import MonthlyCleanup
 from library import UpdateUserSubscriptions
 from models import UserCal
+from time_utils import ConvertToInterval
 
 
 class MainHandler(ExtendedHandler):
