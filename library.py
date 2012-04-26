@@ -383,35 +383,27 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, credentials, email=None, event=None):
+def AddEvent(event_data, credentials, email):
   """Create event in main application calendar and add user as attendee.
 
   Args:
     event_data: a dictionary containing data relevant to a specific event
     credentials: An OAuth2Credentials object used to build a service object.
-    email: an optional email address that is used in the case that the event
-        already exists and we are adding a new attendee via their email address
-    event: a dictionary of data to be sent with a Resource object. When None,
-        corresponds to a new event.
+    email: an email address to be added as an attendee to the event
 
   Returns:
-    A dictionary containing the contents of the event that was added or updated.
-        If update or insert request times out after three tries, returns None.
+    A dictionary containing the contents of the event that was added. If insert
+        request times out after three tries, returns None.
   """
-  if event is None:
-    event = event_data.copy()  # TODO(dhermes) Consider this in the signature
+  event = event_data.copy()  # TODO(dhermes) Does this really need to be copied?
 
-    # Who
-    if 'attendees' not in event:
-      event['attendees'] = []
-    event['attendees'].append({'email': email})
+  # Who
+  if 'attendees' not in event:
+    event['attendees'] = []
+  event['attendees'].append({'email': email})
 
-    return AttemptAPIAction('insert', credentials=credentials,
-                            calendarId=CALENDAR_ID, body=event)
-  else:
-    return AttemptAPIAction('update', credentials=credentials,
-                            calendarId=CALENDAR_ID, eventId=event['id'],
-                            body=event)
+  return AttemptAPIAction('insert', credentials=credentials,
+                          calendarId=CALENDAR_ID, body=event)
 
 
 def ParseEvent(event):
@@ -650,6 +642,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
           #               rather than using GET
 
           # pylint:disable-msg=E1101
+          # TODO(dhermes) Account for failure below
           cal_event = AttemptAPIAction('get', credentials=credentials,
                                        calendarId=CALENDAR_ID,
                                        eventId=event.gcal_edit)
@@ -801,10 +794,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
       if event is None:
-        # Create new event
-        # (leaving out the event argument creates a new event)
-        cal_event = AddOrUpdateEvent(event_data, credentials,
-                                     email=current_user.email())
+        cal_event = AddEvent(event_data, credentials, current_user.email())
+
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           yield (uid, False, True)
@@ -830,6 +821,10 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         # We need to make changes for new event data or a new owner
         if (current_user_id not in event.who or
             db.Text(JsonAscii(event_data)) != event.event_data):
+          # TODO(dhermes) To avoid two trips to the server, reconstruct
+          #               the CalendarEventEntry from the data in event
+          #               rather than using GET
+
           # Grab GCal event to edit
           # pylint:disable-msg=E1103
           log_msg = 'GET sent to %s' % event.gcal_edit

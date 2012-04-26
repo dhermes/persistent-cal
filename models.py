@@ -21,22 +21,71 @@
 __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
+# General libraries
+import json
+
+# App engine specific libraries
+from google.appengine.api import users
 from google.appengine.ext import db
+
+
+class TimeKeyword(db.Model):
+  keyword = db.StringProperty()
+  value = db.StringProperty()
+
+
+class TimeKeywordProperty(db.Property):
+
+  data_type = TimeKeyword
+
+  def get_value_for_datastore(self, model_instance):
+    time_val = super(TimeKeywordProperty, self).get_value_for_datastore(
+        model_instance)
+    return json.dumps({time_val.keyword: time_val.value})
+
+  def make_value_from_datastore(self, value):
+    try:
+      value_dict = json.loads(value)
+      if isinstance(value_dict, dict) and len(value_dict) == 1:
+        key = value_dict.keys()[0]
+        return TimeKeyWord(keyword=key,
+                           value=value_dict[key])
+    except:
+      pass
+
+    return None
+
+  def validate(self, value):
+    if value is not None and not isinstance(value, TimeKeyword):
+      raise BadValueError('Property %s must be convertible '
+                          'to a TimeKeyword instance (%s)' %
+                          (self.name, value))
+    return super(TimeKeywordProperty, self).validate(value)
+
+  def empty(self, value):
+    return not value
 
 
 class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as json
-  # To be removed after migration has been shown to work
-  event_data_old = db.TextProperty()
+  description = db.TextProperty()
+  start = TimeKeywordProperty()
+  end = TimeKeywordProperty()
+  location = db.TextProperty()
+  summary = db.TextProperty()
+  attendees = db.ListProperty(users.User)
   end_date = db.StringProperty(required=True)
-  # plan to delete this and move into event_data as 'event_id' key
   gcal_edit = db.StringProperty(required=True)
 
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()
 
+# In a query, comparing a list property to a value performs the test against the
+# members of the list: list_property = value tests whether the value appears
+# anywhere in the list, list_property < value tests whether any of the list
+# members are less than the given value, and so forth.
 
 class UserCal(db.Model):
   """Holds data for a calendar event (including shared owners)."""
