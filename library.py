@@ -344,8 +344,7 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddOrUpdateEvent(event_data, credentials, email=None,
-                     event=None, push_update=True):
+def AddOrUpdateEvent(event_data, credentials, email=None, event=None):
   """Create event in main application calendar and add user as attendee.
 
   Args:
@@ -355,8 +354,6 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
         already exists and we are adding a new attendee via their email address
     event: a dictionary of data to be sent with a Resource object. When None,
         corresponds to a new event.
-    push_update: an optional boolean which defaults to True. When set to True,
-        This will force updates on the existing event (if event is not None)
 
   Returns:
     A dictionary containing the contents of the event that was added or updated.
@@ -364,30 +361,9 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
   """
   service = InitService(credentials)
 
-  update = True
   if event is None:
     event = event_data.copy()
-    update = False
 
-  if update:
-    attempts = 3
-    updated_event = None
-    if push_update:
-      while attempts:
-        try:
-          # pylint:disable-msg=E1101
-          updated_event = service.events().update(calendarId=CALENDAR_ID,
-                                                  eventId=event['id'],
-                                                  body=event).execute()
-          logging.info('%s updated', updated_event['id'])
-          break
-        except HttpError, e:
-          logging.info(e)
-          attempts -= 1
-          sleep(3)
-
-    return updated_event
-  else:
     # Who
     if 'attendees' not in event:
       event['attendees'] = []
@@ -408,6 +384,23 @@ def AddOrUpdateEvent(event_data, credentials, email=None,
         sleep(3)
 
     return new_event
+  else:
+    attempts = 3
+    updated_event = None
+    while attempts:
+      try:
+        # pylint:disable-msg=E1101
+        updated_event = service.events().update(calendarId=CALENDAR_ID,
+                                                eventId=event['id'],
+                                                body=event).execute()
+        logging.info('%s updated', updated_event['id'])
+        break
+      except HttpError, e:
+        logging.info(e)
+        attempts -= 1
+        sleep(3)
+
+    return updated_event
 
 
 def ParseEvent(event):
@@ -860,13 +853,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           # pylint:disable-msg=E1103
           if db.Text(JsonAscii(event_data)) != event.event_data:
             event.event_data = db.Text(JsonAscii(event_data))
-
-            # Don't push update to avoid pushing twice (if both changed)
-            AddOrUpdateEvent(event_data,
-                             credentials,
-                             event=cal_event,
-                             push_update=False)
-            # push_update=False, impossible to have HttpError
 
           # Push all updates to calendar event
           attempts = 3
