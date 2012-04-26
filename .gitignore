@@ -3,13 +3,6 @@
 #*
 *.pyc
 persistent-cal
-curr_state_cal.json
 _calendar.dat
 _admins.py
-_model_update.py
 _secret_key.py
-guarded_tokens.py
-test.py
-remote_api.py
-verify.html
-calendar_dhermes.dat
