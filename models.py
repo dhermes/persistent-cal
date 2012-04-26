@@ -30,8 +30,14 @@ from google.appengine.ext import db
 
 
 class TimeKeyword(db.Model):
-  keyword = db.StringProperty()
-  value = db.StringProperty()
+  keyword = db.StringProperty(required=True)
+  value = db.StringProperty(required=True)
+
+  def _as_dict(self):
+    return {self.keyword: self.value}
+
+  def __repr__(self):
+    return 'TimeKeyword(%s)' % repr(self._as_dict())
 
 
 class TimeKeywordProperty(db.Property):
@@ -41,16 +47,16 @@ class TimeKeywordProperty(db.Property):
   def get_value_for_datastore(self, model_instance):
     time_val = super(TimeKeywordProperty, self).get_value_for_datastore(
         model_instance)
-    return json.dumps({time_val.keyword: time_val.value})
+    return json.dumps(time_val._as_dict())
 
   def make_value_from_datastore(self, value):
     try:
       value_dict = json.loads(value)
       if isinstance(value_dict, dict) and len(value_dict) == 1:
         key = value_dict.keys()[0]
-        return TimeKeyWord(keyword=key,
+        return TimeKeyword(keyword=key,
                            value=value_dict[key])
-    except:
+    except ValueError:
       pass
 
     return None
@@ -70,14 +76,23 @@ class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as json
-  description = db.TextProperty()
-  start = TimeKeywordProperty()
-  end = TimeKeywordProperty()
-  location = db.TextProperty()
-  summary = db.TextProperty()
-  attendees = db.ListProperty(users.User)
+  description = db.TextProperty(required=True)
+  start = TimeKeywordProperty(required=True)
+  end = TimeKeywordProperty(required=True)
+  location = db.StringProperty(required=True)
+  summary = db.StringProperty(required=True)
+  attendees = db.ListProperty(users.User, required=True)
   end_date = db.StringProperty(required=True)
   gcal_edit = db.StringProperty(required=True)
+
+  def _as_dict(self):
+    attendees = [{'email': attendee.email()} for attendee in self.attendees]
+    return {'start': self.start._as_dict(),
+            'end': self.end._as_dict(),
+            'summary': self.summary,
+            'location': self.location,
+            'description': self.description,
+            'attendees': attendees}
 
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()
