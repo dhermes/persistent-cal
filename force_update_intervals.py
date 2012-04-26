@@ -23,9 +23,9 @@ remote_api_shell.py -s persistent-cal.appspot.com
 
 s~persistent-cal> import sys
 s~persistent-cal> sys.path.append('/path/to/persistent-cal')
-s~persistent-cal> from force_update_intervals import force_update
+s~persistent-cal> from force_update_intervals import ForceUpdate
 s~persistent-cal> now_intervals = [3, 4]  # integers between 0 and 55 inclusive
-s~persistent-cal> force_update(now_intervals)
+s~persistent-cal> ForceUpdate(now_intervals)
 
 Note:
   This is intended to be used when an update or set of updates fail and a bug
@@ -45,8 +45,9 @@ from models import UserCal
 CREDENTIALS = InitCredentials()
 
 
-def force_update(now_intervals):
-  all_users = UserCal.all()
+def ForceUpdate(now_intervals):
+  """Forces an update outside of a cron job for a list of update intervals."""
+  all_users = UserCal.all()  # pylint:disable-msg=E1101
   for user_cal in all_users:
     for now_interval in now_intervals:
       if now_interval in user_cal.update_intervals:

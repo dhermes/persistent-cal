@@ -51,7 +51,6 @@ from google.appengine.ext import webapp
 from google.appengine import runtime
 from webapp2_extras import jinja2
 
-
 # App specific libraries
 from admins import ADMINS_TO
 from models import Event
@@ -316,6 +315,46 @@ def RemoveTimezone(time_value):
   return time_value
 
 
+def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
+                     credentials=None, **kwargs):
+  """Attempt an API action a predetermined number of times before failing.
+
+  Args:
+    http_verb: The HTTP verb of the intended request. Examle: get, update.
+    num_attempts: The number of attempts to make before failing the request.
+        Defaults to 3.
+    log_msg: The log message to report upon success. Defaults to None.
+    credentials: An OAuth2Credentials object used to build a service object.
+    kwargs: The keyword arguments to be passed to the API request.
+
+  Returns:
+    The result of the API request
+  """
+  service = InitService(credentials=credentials)
+
+  # pylint:disable-msg=E1101
+  api_action = getattr(service.events(), http_verb, None)
+  if api_action is None:
+    return None
+
+  attempts = int(num_attempts) if num_attempts > 0 else 0
+  while attempts:
+    try:
+      result = api_action(**kwargs).execute()
+
+      if log_msg is None:
+        log_msg = '%s changed via %s' % (result['id'], http_verb)
+      logging.info(log_msg)
+
+      return result
+    except (httplib2.HttpLib2Error, HttpError) as exc:
+      logging.info(exc)
+      attempts -= 1
+      sleep(3)
+
+  return None
+
+
 def WhiteList(link):
   """Determines if a link is on the whitelist and transforms it if needed.
 
@@ -359,48 +398,20 @@ def AddOrUpdateEvent(event_data, credentials, email=None, event=None):
     A dictionary containing the contents of the event that was added or updated.
         If update or insert request times out after three tries, returns None.
   """
-  service = InitService(credentials)
-
   if event is None:
-    event = event_data.copy()
+    event = event_data.copy()  # TODO(dhermes) Consider this in the signature
 
     # Who
     if 'attendees' not in event:
       event['attendees'] = []
     event['attendees'].append({'email': email})
 
-    attempts = 3
-    new_event = None
-    while attempts:
-      try:
-        # pylint:disable-msg=E1101
-        new_event = service.events().insert(calendarId=CALENDAR_ID,
-                                            body=event).execute()
-        logging.info('%s was inserted', new_event['id'])
-        break
-      except HttpError, e:
-        logging.info(e)
-        attempts -= 1
-        sleep(3)
-
-    return new_event
+    return AttemptAPIAction('insert', credentials=credentials,
+                            calendarId=CALENDAR_ID, body=event)
   else:
-    attempts = 3
-    updated_event = None
-    while attempts:
-      try:
-        # pylint:disable-msg=E1101
-        updated_event = service.events().update(calendarId=CALENDAR_ID,
-                                                eventId=event['id'],
-                                                body=event).execute()
-        logging.info('%s updated', updated_event['id'])
-        break
-      except HttpError, e:
-        logging.info(e)
-        attempts -= 1
-        sleep(3)
-
-    return updated_event
+    return AttemptAPIAction('update', credentials=credentials,
+                            calendarId=CALENDAR_ID, eventId=event['id'],
+                            body=event)
 
 
 def ParseEvent(event):
@@ -609,8 +620,6 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
   """
   logging.info('%s called with: %s', 'UpdateUpcoming', locals())
 
-  service = InitService(credentials)
-
   # TODO(dhermes) Calling set() everytime is expensive. Update UserCal to
   #               ensure UserCal.upcoming is a sorted list of unique elements.
   if set(user_cal.upcoming) != set(upcoming):
@@ -626,21 +635,25 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
         end_date = TimeToDTStamp(event_data['end']['date'])
 
       if end_date > now:
+        # TODO(dhermes) This branch should be its own function
         event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
         if not event.who:  # pylint:disable-msg=E1103
+          log_msg = '%s deleted' % event.gcal_edit  # pylint:disable-msg=E1101
           # pylint:disable-msg=E1101
-          service.events().delete(calendarId=CALENDAR_ID,
-                                  eventId=event.gcal_edit).execute()
-          # pylint:disable-msg=E1101
-          logging.info('%s deleted', event.gcal_edit)
+          AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
+                           calendarId=CALENDAR_ID, eventId=event.gcal_edit)
+
           event.delete()  # pylint:disable-msg=E1103
         else:
           # TODO(dhermes) To avoid two trips to the server, reconstruct
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
+
           # pylint:disable-msg=E1101
-          cal_event = service.events().get(calendarId=CALENDAR_ID,
-                                           eventId=event.gcal_edit).execute()
+          cal_event = AttemptAPIAction('get', credentials=credentials,
+                                       calendarId=CALENDAR_ID,
+                                       eventId=event.gcal_edit)
+
           # Filter out this user from the event attendees
           # pylint:disable-msg=E1103
           if 'attendees' not in cal_event:
@@ -651,9 +664,10 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
           ]
 
           # pylint:disable-msg=E1101
-          service.events().update(calendarId=CALENDAR_ID,
-                                  eventId=cal_event['id'],
-                                  body=cal_event).execute()
+          AttemptAPIAction('update', credentials=credentials,
+                           calendarId=CALENDAR_ID,
+                           eventId=cal_event['id'],
+                           body=cal_event)
           event.put()
 
     user_cal.upcoming = list(set(upcoming))
@@ -757,8 +771,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
   """
   logging.info('%s called with: %s', 'UpdateSubscription', locals())
 
-  service = InitService(credentials)
-
   valid, link = WhiteList(link)
   if not valid:
     # Do nothing if not on the whitelist
@@ -819,20 +831,13 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         if (current_user_id not in event.who or
             db.Text(JsonAscii(event_data)) != event.event_data):
           # Grab GCal event to edit
-          attempts = 3
-          cal_event = None
-          while attempts:
-            try:
-              # pylint:disable-msg=E1101,E1103
-              cal_event = service.events().get(
-                  calendarId=CALENDAR_ID, eventId=event.gcal_edit).execute()
-              # pylint:disable-msg=E1103
-              logging.info('GET sent to %s', event.gcal_edit)
-              break
-            except HttpError, e:
-              logging.info(e)
-              attempts -= 1
-              sleep(3)
+          # pylint:disable-msg=E1103
+          log_msg = 'GET sent to %s' % event.gcal_edit
+          # pylint:disable-msg=E1103
+          cal_event = AttemptAPIAction('get', log_msg=log_msg,
+                                       credentials=credentials,
+                                       calendarId=CALENDAR_ID,
+                                       eventId=event.gcal_edit)
 
           # TODO(dhermes) add to failed queue to be updated by a cron
           if cal_event is None:
@@ -855,28 +860,20 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
             event.event_data = db.Text(JsonAscii(event_data))
 
           # Push all updates to calendar event
-          attempts = 3
-          while attempts:
-            try:
-              # pylint:disable-msg=E1101
-              service.events().update(calendarId=CALENDAR_ID,
-                                      eventId=cal_event['id'],
-                                      body=cal_event).execute()
-              logging.info('%s updated', cal_event['id'])
+          log_msg = '%s updated' % cal_event['id']
+          updated_event = AttemptAPIAction('update', log_msg=log_msg,
+                                           credentials=credentials,
+                                           calendarId=CALENDAR_ID,
+                                           eventId=cal_event['id'],
+                                           body=cal_event)
 
-              # After all possible changes to the Event instance have occurred
-              event.put()  # pylint:disable-msg=E1103
-              break
-            except HttpError, e:
-              logging.info(e)
-              attempts -= 1
-              sleep(3)
-
-          # If attempts is 0, we have failed and don't want to add the
-          # uid to results
-          if attempts == 0:
+          # If updated_event is None, we have failed and
+          # don't want to add the uid to results
+          if updated_event is None:
             yield (uid, False, True)
             continue
+          else:
+            event.put()  # pylint:disable-msg=E1103
 
         # execution has successfully completed
         # TODO(dhermes) catch error on get call below
