@@ -92,6 +92,7 @@ class Event(db.Model):
             'summary': self.summary,
             'location': self.location,
             'description': self.description,
+            'id': self.gcal_edit,
             'attendees': attendees}
 
   def __repr__(self):
