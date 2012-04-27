@@ -131,5 +131,9 @@ class UserCal(db.Model):
   update_intervals = db.ListProperty(long, required=True)
   upcoming = db.ListProperty(str, required=True)
 
+  def put(self):
+    self.upcoming = sorted(set(self.upcoming))
+    super(UserCal, self).put()
+
   def __repr__(self):
     return 'UserCal(owner=%s,name=%s)' % (self.owner.email(), self.key().name())

@@ -459,59 +459,59 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
   """
   logging.info('%s called with: %s', 'UpdateUpcoming', locals())
 
-  # TODO(dhermes) Calling set() everytime is expensive. Update UserCal to
-  #               ensure UserCal.upcoming is a sorted list of unique elements.
-  if set(user_cal.upcoming) != set(upcoming):
+  upcoming.sort()
+  if user_cal.upcoming != upcoming:
     now = datetime.datetime.utcnow()
-    for uid in set(user_cal.upcoming).difference(upcoming):
-      event = Event.get_by_key_name(uid)
-      # pylint:disable-msg=E1103
-      event_data = json.loads(event.event_data)
-
-      if 'dateTime' in event_data['end']:
-        end_date = time_utils.TimeToDTStamp(event_data['end']['dateTime'])
-      else:
-        end_date = time_utils.TimeToDTStamp(event_data['end']['date'])
-
-      if end_date > now:
+    for uid in user_cal.upcoming:
+      if uid not in upcoming:
         # TODO(dhermes) This branch should be its own function
-        # If federated identity not set, User.__cmp__ only uses email
-        event.attendees.remove(user_cal.owner)
-        if not event.attendees:
-          log_msg = '%s deleted' % event.gcal_edit  # pylint:disable-msg=E1101
-          # pylint:disable-msg=E1101
-          AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
-                           calendarId=CALENDAR_ID, eventId=event.gcal_edit)
+        event = Event.get_by_key_name(uid)
+        # pylint:disable-msg=E1103
+        event_data = json.loads(event.event_data)
 
-          event.delete()  # pylint:disable-msg=E1103
+        if 'dateTime' in event_data['end']:
+          end_date = time_utils.TimeToDTStamp(event_data['end']['dateTime'])
         else:
-          # TODO(dhermes) To avoid two trips to the server, reconstruct
-          #               the CalendarEventEntry from the data in event
-          #               rather than using GET
+          end_date = time_utils.TimeToDTStamp(event_data['end']['date'])
 
-          # pylint:disable-msg=E1101
-          # TODO(dhermes) Account for failure below
-          cal_event = AttemptAPIAction('get', credentials=credentials,
-                                       calendarId=CALENDAR_ID,
-                                       eventId=event.gcal_edit)
+        if end_date > now:
+          # If federated identity not set, User.__cmp__ only uses email
+          event.attendees.remove(user_cal.owner)
+          if not event.attendees:
+            log_msg = '%s deleted' % event.gcal_edit  # pylint:disable-msg=E1101
+            # pylint:disable-msg=E1101
+            AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
+                             calendarId=CALENDAR_ID, eventId=event.gcal_edit)
 
-          # Filter out this user from the event attendees
-          # pylint:disable-msg=E1103
-          if 'attendees' not in cal_event:
-            cal_event['attendees'] = []
-          cal_event['attendees'] = [
-              attendee_dict for attendee_dict in cal_event['attendees']
-              if attendee_dict['email'] != user_cal.owner.email()
-          ]
+            event.delete()  # pylint:disable-msg=E1103
+          else:
+            # TODO(dhermes) To avoid two trips to the server, reconstruct
+            #               the CalendarEventEntry from the data in event
+            #               rather than using GET
 
-          # pylint:disable-msg=E1101
-          AttemptAPIAction('update', credentials=credentials,
-                           calendarId=CALENDAR_ID,
-                           eventId=cal_event['id'],
-                           body=cal_event)
-          event.put()
+            # pylint:disable-msg=E1101
+            # TODO(dhermes) Account for failure below
+            cal_event = AttemptAPIAction('get', credentials=credentials,
+                                         calendarId=CALENDAR_ID,
+                                         eventId=event.gcal_edit)
 
-    user_cal.upcoming = list(set(upcoming))
+            # Filter out this user from the event attendees
+            # pylint:disable-msg=E1103
+            if 'attendees' not in cal_event:
+              cal_event['attendees'] = []
+            cal_event['attendees'] = [
+                attendee_dict for attendee_dict in cal_event['attendees']
+                if attendee_dict['email'] != user_cal.owner.email()
+            ]
+
+            # pylint:disable-msg=E1101
+            AttemptAPIAction('update', credentials=credentials,
+                             calendarId=CALENDAR_ID,
+                             eventId=cal_event['id'],
+                             body=cal_event)
+            event.put()
+
+    user_cal.upcoming = upcoming
     user_cal.put()
 
 
@@ -554,7 +554,7 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
 
   if link_index > 0:
     links = links[link_index:]
-  upcoming = [] if upcoming is None else upcoming
+  upcoming = upcoming or []
 
   # Set default values for link index and last used uid variables. These
   # are used to to pick up where the loop left off in case the task encounters
