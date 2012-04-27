@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (C) 2010-2011 Google Inc.
+# Copyright (C) 2010-2012 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -253,29 +253,6 @@ def WhiteList(link):
   return valid, transformed
 
 
-def AddEvent(event_data, credentials, email):
-  """Create event in main application calendar and add user as attendee.
-
-  Args:
-    event_data: a dictionary containing data relevant to a specific event
-    credentials: An OAuth2Credentials object used to build a service object.
-    email: an email address to be added as an attendee to the event
-
-  Returns:
-    A dictionary containing the contents of the event that was added. If insert
-        request times out after three tries, returns None.
-  """
-  event = event_data.copy()  # TODO(dhermes) Does this really need to be copied?
-
-  # Who
-  if 'attendees' not in event:
-    event['attendees'] = []
-  event['attendees'].append({'email': email})
-
-  return AttemptAPIAction('insert', credentials=credentials,
-                          calendarId=CALENDAR_ID, body=event)
-
-
 def ParseEvent(event):
   """Parses an iCalendar.cal.Event instance to a predefined format.
 
@@ -300,9 +277,9 @@ def ParseEvent(event):
     UnexpectedDescription in the case that the description does not contain the
         phrase we expect it to.
   """
-  uid = unicode(event.get('uid'))
-  description = unicode(event.get('description'))
-  location = unicode(event.get('location'))
+  uid = unicode(event.get('uid'))  # TODO(dhermes) FIX THIS
+  description = unicode(event.get('description'))  # TODO(dhermes) FIX THIS
+  location = unicode(event.get('location'))  # TODO(dhermes) FIX THIS
 
   # The phrase 'No destination specified' does not match its
   # counterpart in the description, so we transform {location}.
@@ -498,8 +475,9 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
       if end_date > now:
         # TODO(dhermes) This branch should be its own function
-        event.who.remove(user_cal.owner.user_id())  # pylint:disable-msg=E1103
-        if not event.who:  # pylint:disable-msg=E1103
+        # If federated identity not set, User.__cmp__ only uses email
+        event.attendees.remove(user_cal.owner)
+        if not event.attendees:
           log_msg = '%s deleted' % event.gcal_edit  # pylint:disable-msg=E1101
           # pylint:disable-msg=E1101
           AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
@@ -664,7 +642,9 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
       if event is None:
-        cal_event = AddEvent(event_data, credentials, current_user.email())
+        event_data['attendees'] = [{'email': current_user.email()}]
+        cal_event = AttemptAPIAction('insert', credentials=credentials,
+                                     calendarId=CALENDAR_ID, body=event_data)
 
         # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
@@ -690,9 +670,13 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
                time_utils.RemoveTimezone(component.get('dtend').dt) > now,
                False)
       else:
+        # Spoof existing datapoints from the Event object
+        event_data['id'] = event.gcal_edit
+        event_data['attendees'] = event.attendee_emails()
+
         # We need to make changes for new event data or a new owner
-        if (current_user_id not in event.who or
-            db.Text(JsonAscii(event_data)) != event.event_data):
+        if (current_user not in event.attendees or
+            event_data != event.as_dict()):
           # TODO(dhermes) To avoid two trips to the server, reconstruct
           #               the CalendarEventEntry from the data in event
           #               rather than using GET
@@ -711,10 +695,9 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
             yield (uid, False, True)
             continue
 
-          # Update who
-          if current_user_id not in event.who:  # pylint:disable-msg=E1103
-            # pylint:disable-msg=E1103
-            event.who.append(current_user_id)  # id is string
+          # Update attendees
+          if current_user not in event.attendees:
+            event.attendees.append(current_user)
 
             # add existing event to current_user's calendar
             if 'attendees' not in cal_event:

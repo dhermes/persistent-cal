@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (C) 2010-2011 Google Inc.
+# Copyright (C) 2010-2012 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,11 +45,11 @@ class TimeKeyword(db.Model):
 
     return TimeKeyword(keyword=key, value=time_dict[key])
 
-  def _as_dict(self):
+  def as_dict(self):
     return {self.keyword: self.value}
 
   def __repr__(self):
-    return 'TimeKeyword(%s)' % repr(self._as_dict())
+    return 'TimeKeyword(%s)' % repr(self.as_dict())
 
 
 class TimeKeywordProperty(db.Property):
@@ -59,7 +59,7 @@ class TimeKeywordProperty(db.Property):
   def get_value_for_datastore(self, model_instance):
     time_val = super(TimeKeywordProperty, self).get_value_for_datastore(
         model_instance)
-    return json.dumps(time_val._as_dict())
+    return json.dumps(time_val.as_dict())
 
   def make_value_from_datastore(self, value):
     try:
@@ -86,8 +86,6 @@ class TimeKeywordProperty(db.Property):
 
 class Event(db.Model):
   """Holds data for a calendar event (including shared attendees)."""
-  # grep -r who .
-  # db.to_dict(model_instance, dictionary=None):
   who = db.StringListProperty(required=True)  # hold owner ids as strings
   event_data = db.TextProperty(required=True)  # python dict as json
   description = db.TextProperty(required=True)
@@ -102,15 +100,17 @@ class Event(db.Model):
   def end_date(self):
     return time_utils.StringToDayString(self.end.value)
 
-  def _as_dict(self):
-    attendees = [{'email': attendee.email()} for attendee in self.attendees]
-    return {'start': self.start._as_dict(),
-            'end': self.end._as_dict(),
+  def attendee_emails(self):
+    return [{'email': attendee.email()} for attendee in self.attendees]
+
+  def as_dict(self):
+    return {'start': self.start.as_dict(),
+            'end': self.end.as_dict(),
             'summary': self.summary,
             'location': self.location,
             'description': self.description,
             'id': self.gcal_edit,
-            'attendees': attendees}
+            'attendees': self.attendee_emails()}
 
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()
