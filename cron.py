@@ -64,7 +64,7 @@ class MainHandler(ExtendedHandler):
     #               that all_users becomes too big to set off background tasks
     all_users = UserCal.all()
     for user_cal in all_users:
-      if now_interval in user_cal.update_intervals:
+      if user_cal.calendars and now_interval in user_cal.update_intervals:
         if credentials is None:
           credentials = InitCredentials()
         UpdateUserSubscriptions(user_cal.calendars, user_cal,
