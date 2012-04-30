@@ -139,6 +139,7 @@ def InitCredentials(filename=CREDENTIALS_FILENAME):
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
+    # pylint:disable-msg=E1123
     EmailAdmins('Credentials in calendar resource not good.', defer_now=True)
     raise CredentialsLoadError('No credentials retrieved from calendar.dat')
 
@@ -354,6 +355,7 @@ def CheckCalendarDiscoveryDoc(credentials=None):
       credentials=credentials)
 
   if not success:
+    # pylint:disable-msg=E1123
     EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
     return
 
@@ -361,8 +363,9 @@ def CheckCalendarDiscoveryDoc(credentials=None):
     cached_discovery_doc = fh.read()
 
   if cached_discovery_doc != current_discovery_doc:
+    # pylint:disable-msg=E1123
     EmailAdmins('Current discovery doc disagrees with cached version.',
-                 defer_now=True)
+                defer_now=True)
 
 
 def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
@@ -378,8 +381,9 @@ def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
   resp, _ = http.request(future_location)
 
   if resp.status != 404:
+    # pylint:disable-msg=E1123
     EmailAdmins('Future features JSON responded with %s.' % resp.status,
-                 defer_now=True)
+                defer_now=True)
 
 
 def DeferFunctionDecorator(method):
@@ -449,7 +453,7 @@ def MonthlyCleanup(relative_date):
     msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
                                                              today)
     logging.info(msg)
-    EmailAdmins(msg, defer_now=True)
+    EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
     return
 
   prior_date_as_str = time_utils.FormatTime(prior_date)
@@ -565,13 +569,14 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
           upcoming.append(uid)
         elif failed:
           logging.info('silently failed operation on %s from %s', uid, link)
+          # pylint:disable-msg=E1123
           EmailAdmins('silently failed operation on %s from %s' % (uid, link),
-                       defer_now=True)
+                      defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
     defer(UpdateUserSubscriptions, links, user_cal, credentials,
           upcoming=upcoming, link_index=index, last_used_uid=uid,
-          defer_now=defer_now, _url='/workers')
+          defer_now=False, _url='/workers')
     return
 
   # If the loop completes without timing out
@@ -624,7 +629,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
       msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
       logging.info(msg)
       if component.name != 'VCALENDAR':
-        EmailAdmins(msg, defer_now=True)
+        EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
     else:
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
@@ -736,13 +741,13 @@ def DeadlineDecorator(method):
       # raise the error, returning a 200 status code, hence killing the task.
       msg = 'Permanent failure attempting to execute task.'
       logging.exception(msg)
-      EmailAdmins(msg, defer_now=True)
+      EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
     except (runtime.DeadlineExceededError,
             urlfetch_errors.DeadlineExceededError):
       # pylint:disable-msg=W0142
       traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
       logging.exception(traceback_info)
-      EmailAdmins(traceback_info, defer_now=True)
+      EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
 
       self.response.clear()
       self.response.set_status(500)
@@ -808,7 +813,7 @@ class ExtendedHandler(webapp.RequestHandler):
     """
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
     logging.exception(traceback_info)
-    EmailAdmins(traceback_info, defer_now=True)
+    EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
 
     self.response.clear()
     self.response.set_status(500)
