@@ -382,7 +382,40 @@ def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
                  defer_now=True)
 
 
-def MonthlyCleanup(relative_date, defer_now=False):
+def DeferFunctionDecorator(method):
+  """Decorator that allows a function to accept a defer_now argument.
+
+  Args:
+    method: a callable object
+
+  Returns:
+    A new function which will do the same work as method, will also
+        accept a defer_now keyword argument, and will log the arguments
+        passed in. In the case that defer_now=True, the new function
+        will spawn a task in the deferred queue at /workers.
+  """
+
+  def DeferrableMethod(*args, **kwargs):
+    """Returned function that uses method from outside scope
+
+    Adds behavior for logging and deferred queue.
+    """
+    logging.info('%s called with: %s', method.func_name, locals())
+
+    defer_now = kwargs.pop('defer_now', False)
+    if defer_now:
+      kwargs['defer_now'] = False
+      kwargs['_url'] = '/workers'
+
+      defer(DeferrableMethod, *args, **kwargs)
+    else:
+      return method(*args, **kwargs)
+
+  return DeferrableMethod
+
+
+@DeferFunctionDecorator
+def MonthlyCleanup(relative_date):
   """Deletes events older than three months.
 
   Will delete events from the datastore that are older than three months. First
@@ -391,21 +424,13 @@ def MonthlyCleanup(relative_date, defer_now=False):
   NOTE: This would seem to argue that relative_date should not be provided, but
   we want to use the relative_date from the server that is executing the cron
   job, not the one executing the cleanup (as there may be some small
-  differences). In the that relative_date does not pass this check, we log and
-  send and email to the admins, but do not raise an error. This is done so
+  differences). In the case that relative_date does not pass this check, we log
+  and send and email to the admins, but do not raise an error. This is done so
   this can be removed from the task queue in the case of the invalid input.
 
   Args:
     relative_date: date provided by calling script. Expected to be current date.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  logging.info('%s called with: %s', 'MonthlyCleanup', locals())
-
-  if defer_now:
-    defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
-    return
-
   prior_date_day = relative_date.day
 
   prior_date_month = relative_date.month - 3
@@ -488,8 +513,9 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
 
 # pylint:disable-msg=R0913
+@DeferFunctionDecorator
 def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
-                            link_index=0, last_used_uid=None, defer_now=False):
+                            link_index=0, last_used_uid=None):
   """Updates a list of calendar subscriptions for a user.
 
   Loops through each subscription URL in links and calls UpdateSubscription for
@@ -513,17 +539,7 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of UIDs
         from the first subscription (first element of links) that is updated.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
-
-  if defer_now:
-    defer(UpdateUserSubscriptions, links, user_cal, credentials,
-          upcoming=upcoming, link_index=link_index,
-          last_used_uid=last_used_uid, defer_now=False, _url='/workers')
-    return
-
   if link_index > 0:
     links = links[link_index:]
   upcoming = upcoming or []
@@ -676,7 +692,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 ############# Handler class helper #############
 ################################################
 
-def EmailAdmins(error_msg, defer_now=False):
+@DeferFunctionDecorator
+def EmailAdmins(error_msg):
   """Sends email to admins with the preferred message, with option to defer.
 
   Uses the template error_notify.templ to generate an email with the {error_msg}
@@ -684,13 +701,7 @@ def EmailAdmins(error_msg, defer_now=False):
 
   Args:
     error_msg: A string containing an error to be sent to admins by email
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  if defer_now:
-    defer(EmailAdmins, error_msg, defer_now=False, _url='/workers')
-    return
-
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
   subject = 'Persistent Cal Error: Admin Notify'
   body = JINJA2_RENDERER.render_template('error_notify.templ', error=error_msg)
