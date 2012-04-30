@@ -118,7 +118,6 @@ class AddSubscription(ExtendedHandler):
       logging.info('whitelist:fail')
       return
 
-    # TODO(dhermes): Make sure self.request.referrer is safe
     current_user = users.get_current_user()
     if current_user is None:
       self.response.out.write(json.dumps('no_user:fail'))
@@ -175,8 +174,6 @@ class ChangeFrequency(ExtendedHandler):
     description of the update as well as the frequency value for the
     <select> element.
     """
-    # TODO(dhermes): Make sure self.request.referrer is safe
-
     # Make sure change has been requested by a user before doing any work
     current_user = users.get_current_user()
     if current_user is None:

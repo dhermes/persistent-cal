@@ -61,10 +61,11 @@ class MainHandler(ExtendedHandler):
     credentials = None
 
     # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
-    #               that all_users becomes too big to set off background tasks
-    all_users = UserCal.all()
-    for user_cal in all_users:
-      if user_cal.calendars and now_interval in user_cal.update_intervals:
+    #               that current_users becomes too big to set off all of the
+    #               background tasks before the process can exit
+    current_users = UserCal.gql('WHERE update_intervals = :1', now_interval)
+    for user_cal in current_users:
+      if user_cal.calendars:
         if credentials is None:
           credentials = InitCredentials()
         UpdateUserSubscriptions(user_cal.calendars, user_cal,

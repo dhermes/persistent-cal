@@ -634,7 +634,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         event.put()
 
         # execution has successfully completed
-        # TODO(dhermes) catch error on get call below
         yield (uid,
                time_utils.RemoveTimezone(component.get('dtend').dt) > now,
                False)
@@ -669,7 +668,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
             event.put()  # pylint:disable-msg=E1103
 
         # execution has successfully completed
-        # TODO(dhermes) catch error on get call below
         yield (uid,
                time_utils.RemoveTimezone(component.get('dtend').dt) > now,
                False)

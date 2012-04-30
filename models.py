@@ -129,19 +129,11 @@ class Event(db.Model):  # pylint:disable-msg=R0904
   def __repr__(self):
     return 'Event(name=%s)' % self.key().name()
 
-# In a query, comparing a list property to a value performs the test against the
-# members of the list: list_property = value tests whether the value appears
-# anywhere in the list, list_property < value tests whether any of the list
-# members are less than the given value, and so forth.
 
 class UserCal(db.Model):  # pylint:disable-msg=R0904
   """Holds data for a calendar event (including shared owners)."""
   owner = db.UserProperty(required=True)
-  # hold calendar feed link as strings
   calendars = db.StringListProperty(required=True)
-  # See ('http://code.google.com/appengine/docs/python/datastore/'
-  #      'typesandpropertyclasses.html#ListProperty')
-  # int defaults to long, so I'll use long
   update_intervals = db.ListProperty(long, required=True)
   upcoming = db.ListProperty(str, required=True)
 
