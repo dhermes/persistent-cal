@@ -90,6 +90,10 @@ class BadInterval(Error):
   """Error corresponding to an unanticipated number of update intervals."""
 
 
+class MissingUID(Error):
+  """Error corresponding to missing UID in an event."""
+
+
 class UnexpectedDescription(Error):
   """Error corresponding to an unexpected event description."""
 
@@ -263,10 +267,14 @@ def ParseEvent(event):
     UnexpectedDescription in the case that the description does not contain the
         phrase we expect it to.
   """
-  # TODO(dhermes) FIX THIS: Can set value to None
-  uid = unicode(event.get('uid'))
-  description = unicode(event.get('description'))
-  location = unicode(event.get('location'))
+  uid = event.get('uid', None)
+  if uid is None:
+    raise MissingUID(event)
+
+  # convert from type icalendar.prop.vText to unicode
+  uid = unicode(uid)
+  description = unicode(event.get('description', ''))
+  location = unicode(event.get('location', ''))
 
   # The phrase 'No destination specified' does not match its
   # counterpart in the description, so we transform {location}.

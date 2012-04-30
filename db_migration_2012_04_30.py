@@ -36,11 +36,14 @@ from models import Event
 
 def TransformEvent(event):
   """Takes Event object to new specification."""
+  new_location = event.location
+  if new_location == 'None':
+    new_location = ''
   new_event = Event(key_name=event.key().name(),
                     description=event.description,
                     start=event.start,
                     end=event.end,
-                    location=event.location,
+                    location=new_location,
                     summary=event.summary,
                     attendees=event.attendees,
                     gcal_edit=event.gcal_edit)
