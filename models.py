@@ -99,8 +99,6 @@ class TimeKeywordProperty(db.Property):
 
 class Event(db.Model):  # pylint:disable-msg=R0904
   """Holds data for a calendar event (including shared attendees)."""
-  who = db.StringListProperty()  # hold owner ids as strings
-  event_data = db.TextProperty()  # python dict as json
   description = db.TextProperty(required=True)
   start = TimeKeywordProperty(required=True)
   end = TimeKeywordProperty(required=True)

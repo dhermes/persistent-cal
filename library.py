@@ -263,9 +263,10 @@ def ParseEvent(event):
     UnexpectedDescription in the case that the description does not contain the
         phrase we expect it to.
   """
-  uid = unicode(event.get('uid'))  # TODO(dhermes) FIX THIS
-  description = unicode(event.get('description'))  # TODO(dhermes) FIX THIS
-  location = unicode(event.get('location'))  # TODO(dhermes) FIX THIS
+  # TODO(dhermes) FIX THIS: Can set value to None
+  uid = unicode(event.get('uid'))
+  description = unicode(event.get('description'))
+  location = unicode(event.get('location'))
 
   # The phrase 'No destination specified' does not match its
   # counterpart in the description, so we transform {location}.
@@ -453,6 +454,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
         # TODO(dhermes) This branch should be its own function
         event = Event.get_by_key_name(uid)
 
+        # pylint:disable-msg=E1103
         end_date = time_utils.TimeToDTStamp(event.end.value)
         if end_date > now:
           # If federated identity not set, User.__cmp__ only uses email
@@ -465,30 +467,12 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
             event.delete()  # pylint:disable-msg=E1103
           else:
-            # TODO(dhermes) To avoid two trips to the server, reconstruct
-            #               the CalendarEventEntry from the data in event
-            #               rather than using GET
-
             # pylint:disable-msg=E1101
             # TODO(dhermes) Account for failure below
-            cal_event = AttemptAPIAction('get', credentials=credentials,
-                                         calendarId=CALENDAR_ID,
-                                         eventId=event.gcal_edit)
-
-            # Filter out this user from the event attendees
-            # pylint:disable-msg=E1103
-            if 'attendees' not in cal_event:
-              cal_event['attendees'] = []
-            cal_event['attendees'] = [
-                attendee_dict for attendee_dict in cal_event['attendees']
-                if attendee_dict['email'] != user_cal.owner.email()
-            ]
-
-            # pylint:disable-msg=E1101
             AttemptAPIAction('update', credentials=credentials,
                              calendarId=CALENDAR_ID,
-                             eventId=cal_event['id'],
-                             body=cal_event)
+                             eventId=event.gcal_edit,
+                             body=event.as_dict())
             event.put()
 
     user_cal.upcoming = upcoming
@@ -655,12 +639,13 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         if (current_user not in event.attendees or
             event_data != event.as_dict()):
           # Update attendees
-          if current_user not in event.attendees:
-            event.attendees.append(current_user)
+          if current_user not in event.attendees:  # pylint:disable-msg=E1103
+            event.attendees.append(current_user)  # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1103
           event_data['attendees'] = event.attendee_emails()
 
           # Push all updates to calendar event
-          log_msg = '%s updated' % cal_event['id']
+          log_msg = '%s updated' % event.gcal_edit  # pylint:disable-msg=E1103
           updated_event = AttemptAPIAction('update', log_msg=log_msg,
                                            credentials=credentials,
                                            calendarId=CALENDAR_ID,
