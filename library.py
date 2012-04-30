@@ -98,20 +98,6 @@ class CredentialsLoadError(Error):
   """Error when credentials are not loaded correctly from a specified file."""
 
 
-def JsonAscii(obj):
-  """Calls json.dumps with ensure_ascii explicitly set to True.
-
-  Args:
-    obj: any object that can be turned into json
-
-  Returns:
-    A JSON representation of obj that is guaranteed to contain only
-        ascii characters (this is because we use it to store certain
-        objects in models.Event.event_data as a TextProperty)
-  """
-  return json.dumps(obj, ensure_ascii=True)
-
-
 def UpdateString(update_intervals):
   """Calculates a short and long message to represent frequency of updates.
 
@@ -466,14 +452,8 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
       if uid not in upcoming:
         # TODO(dhermes) This branch should be its own function
         event = Event.get_by_key_name(uid)
-        # pylint:disable-msg=E1103
-        event_data = json.loads(event.event_data)
 
-        if 'dateTime' in event_data['end']:
-          end_date = time_utils.TimeToDTStamp(event_data['end']['dateTime'])
-        else:
-          end_date = time_utils.TimeToDTStamp(event_data['end']['date'])
-
+        end_date = time_utils.TimeToDTStamp(event.end.value)
         if end_date > now:
           # If federated identity not set, User.__cmp__ only uses email
           event.attendees.remove(user_cal.owner)
@@ -618,7 +598,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
     # http://www.python.org/dev/peps/pep-0255/ (Specification: Return)
     return
 
-  current_user_id = current_user.user_id()
   now = datetime.datetime.utcnow()
 
   import_feed = urlopen(link)
@@ -653,8 +632,6 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 
         gcal_edit = cal_event['id']
         event = Event(key_name=uid,
-                      who=[current_user_id],  # id is string
-                      event_data=db.Text(JsonAscii(event_data)),
                       description=db.Text(event_data['description']),
                       start=TimeKeyword.from_dict(event_data['start']),
                       end=TimeKeyword.from_dict(event_data['end']),
@@ -677,45 +654,18 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         # We need to make changes for new event data or a new owner
         if (current_user not in event.attendees or
             event_data != event.as_dict()):
-          # TODO(dhermes) To avoid two trips to the server, reconstruct
-          #               the CalendarEventEntry from the data in event
-          #               rather than using GET
-
-          # Grab GCal event to edit
-          # pylint:disable-msg=E1103
-          log_msg = 'GET sent to %s' % event.gcal_edit
-          # pylint:disable-msg=E1103
-          cal_event = AttemptAPIAction('get', log_msg=log_msg,
-                                       credentials=credentials,
-                                       calendarId=CALENDAR_ID,
-                                       eventId=event.gcal_edit)
-
-          # TODO(dhermes) add to failed queue to be updated by a cron
-          if cal_event is None:
-            yield (uid, False, True)
-            continue
-
           # Update attendees
           if current_user not in event.attendees:
             event.attendees.append(current_user)
-
-            # add existing event to current_user's calendar
-            if 'attendees' not in cal_event:
-              cal_event['attendees'] = []
-            cal_event['attendees'].append({'email': current_user.email()})
-
-          # Update existing event
-          # pylint:disable-msg=E1103
-          if db.Text(JsonAscii(event_data)) != event.event_data:
-            event.event_data = db.Text(JsonAscii(event_data))
+          event_data['attendees'] = event.attendee_emails()
 
           # Push all updates to calendar event
           log_msg = '%s updated' % cal_event['id']
           updated_event = AttemptAPIAction('update', log_msg=log_msg,
                                            credentials=credentials,
                                            calendarId=CALENDAR_ID,
-                                           eventId=cal_event['id'],
-                                           body=cal_event)
+                                           eventId=event.gcal_edit,
+                                           body=event_data)
 
           # If updated_event is None, we have failed and
           # don't want to add the uid to results
