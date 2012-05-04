@@ -153,7 +153,7 @@ class AddSubscription(ExtendedHandler):
     #               error and still leave this function. Also within UpSc,
     #               make sure all events that are added to GCal are also added
     #               to the datastore.
-    UpdateUserSubscriptions([link], user_cal, CREDENTIALS, defer_now=True)
+    UpdateUserSubscriptions(user_cal, CREDENTIALS, defer_now=True)
     # pylint:disable-msg=E1103
     self.response.out.write(json.dumps(user_cal.calendars))
 

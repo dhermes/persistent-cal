@@ -520,27 +520,28 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
 
 # pylint:disable-msg=R0913
-def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
-                            link_index=0, last_used_uid=None, defer_now=False):
+def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
+                            upcoming=None, last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
 
-  Loops through each subscription URL in links and calls UpdateSubscription for
-  each URL. Keeps a list of upcoming events which will be updated by
-  UpdateUpcoming upon completion. If the application encounters one of the two
-  DeadlineExceededError's while the events are being processed, the function
-  calls itself, but uses the upcoming, link_index and last_used_uid keyword
-  arguments to save the current processing state.
+  Loops through each subscription URL in links (or user_cal.calendars) and calls
+  UpdateSubscription for each URL. Keeps a list of upcoming events which will
+  be updated by UpdateUpcoming upon completion. If the application encounters
+  one of the two DeadlineExceededError's while the events are being processed,
+  the function calls itself, but uses the upcoming, link_index and
+  last_used_uid keyword arguments to save the current processing state.
 
   Args:
-    links: a list of URLs to the .ics subscription feeds
     user_cal: a UserCal object that will have upcoming subscriptions updated
     credentials: An OAuth2Credentials object used to build a service object.
-    upcoming: a list of UID strings representing events in the subscribed feeds
-        of the user that have not occurred yet (i.e. they are upcoming). By
-        default this value is None and transformed to [] within the function.
+    links: a list of URLs to the .ics subscription feeds. This is None by
+        default, in which case user_cal.calendars is used.
     link_index: a placeholder index within the list of links which is 0 by
         default. This is intended to be passed in only by calls from
         UpdateUserSubscriptions.
+    upcoming: a list of UID strings representing events in the subscribed feeds
+        of the user that have not occurred yet (i.e. they are upcoming). By
+        default this value is None and transformed to [] within the function.
     last_used_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of UIDs
@@ -551,10 +552,13 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
   logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
 
   if defer_now:
-    defer(UpdateUserSubscriptions, links, user_cal, credentials,
-          upcoming=upcoming, link_index=link_index,
+    defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
+          link_index=link_index, upcoming=upcoming,
           last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
+
+  if links is None:
+    links = user_cal.calendars
 
   if link_index > 0:
     links = links[link_index:]
@@ -585,8 +589,8 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
                       defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
-    defer(UpdateUserSubscriptions, links, user_cal, credentials,
-          upcoming=upcoming, link_index=index, last_used_uid=uid,
+    defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
+          link_index=index, upcoming=upcoming, last_used_uid=uid,
           defer_now=False, _url='/workers')
     return
 

@@ -52,6 +52,5 @@ def ForceUpdate(now_intervals):
   matching_users = UserCal.gql('WHERE update_intervals IN :1',
                                legitimate_intervals)
   for user_cal in matching_users:
-    UpdateUserSubscriptions(user_cal.calendars, user_cal,
-                            CREDENTIALS, defer_now=True)
+    UpdateUserSubscriptions(user_cal, CREDENTIALS, defer_now=True)
     print user_cal
