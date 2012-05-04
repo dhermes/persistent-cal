@@ -68,7 +68,6 @@ class MainHandler(ExtendedHandler):
       if user_cal.calendars:
         if credentials is None:
           credentials = InitCredentials()
-        # pylint:disable-msg=E1123
         UpdateUserSubscriptions(user_cal.calendars, user_cal,
                                 credentials, defer_now=True)
 
@@ -101,7 +100,7 @@ class CleanupHandler(ExtendedHandler):
       return
 
     now = datetime.datetime.utcnow()
-    MonthlyCleanup(now.date(), defer_now=True)  # pylint:disable-msg=E1123
+    MonthlyCleanup(now.date(), defer_now=True)
 
 
 APPLICATION = webapp.WSGIApplication([

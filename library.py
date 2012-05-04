@@ -139,7 +139,6 @@ def InitCredentials(filename=CREDENTIALS_FILENAME):
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
-    # pylint:disable-msg=E1123
     EmailAdmins('Credentials in calendar resource not good.', defer_now=True)
     raise CredentialsLoadError('No credentials retrieved from calendar.dat')
 
@@ -355,7 +354,6 @@ def CheckCalendarDiscoveryDoc(credentials=None):
       credentials=credentials)
 
   if not success:
-    # pylint:disable-msg=E1123
     EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
     return
 
@@ -363,7 +361,6 @@ def CheckCalendarDiscoveryDoc(credentials=None):
     cached_discovery_doc = fh.read()
 
   if cached_discovery_doc != current_discovery_doc:
-    # pylint:disable-msg=E1123
     EmailAdmins('Current discovery doc disagrees with cached version.',
                 defer_now=True)
 
@@ -381,7 +378,6 @@ def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
   resp, _ = http.request(future_location)
 
   if resp.status != 404:
-    # pylint:disable-msg=E1123
     EmailAdmins('Future features JSON responded with %s.' % resp.status,
                 defer_now=True)
 
@@ -418,8 +414,7 @@ def DeferFunctionDecorator(method):
   return DeferrableMethod
 
 
-@DeferFunctionDecorator
-def MonthlyCleanup(relative_date):
+def MonthlyCleanup(relative_date, defer_now=False):
   """Deletes events older than three months.
 
   Will delete events from the datastore that are older than three months. First
@@ -434,7 +429,15 @@ def MonthlyCleanup(relative_date):
 
   Args:
     relative_date: date provided by calling script. Expected to be current date.
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
   """
+  logging.info('%s called with: %s', 'MonthlyCleanup', locals())
+
+  if defer_now:
+    defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
+    return
+
   prior_date_day = relative_date.day
 
   prior_date_month = relative_date.month - 3
@@ -453,7 +456,7 @@ def MonthlyCleanup(relative_date):
     msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
                                                              today)
     logging.info(msg)
-    EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
+    EmailAdmins(msg, defer_now=True)
     return
 
   prior_date_as_str = time_utils.FormatTime(prior_date)
@@ -517,9 +520,8 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
 
 # pylint:disable-msg=R0913
-@DeferFunctionDecorator
 def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
-                            link_index=0, last_used_uid=None):
+                            link_index=0, last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
 
   Loops through each subscription URL in links and calls UpdateSubscription for
@@ -543,7 +545,17 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of UIDs
         from the first subscription (first element of links) that is updated.
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
   """
+  logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
+
+  if defer_now:
+    defer(UpdateUserSubscriptions, links, user_cal, credentials,
+          upcoming=upcoming, link_index=link_index,
+          last_used_uid=last_used_uid, defer_now=False, _url='/workers')
+    return
+
   if link_index > 0:
     links = links[link_index:]
   upcoming = upcoming or []
@@ -569,7 +581,6 @@ def UpdateUserSubscriptions(links, user_cal, credentials, upcoming=None,
           upcoming.append(uid)
         elif failed:
           logging.info('silently failed operation on %s from %s', uid, link)
-          # pylint:disable-msg=E1123
           EmailAdmins('silently failed operation on %s from %s' % (uid, link),
                       defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
@@ -629,7 +640,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
       msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
       logging.info(msg)
       if component.name != 'VCALENDAR':
-        EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
+        EmailAdmins(msg, defer_now=True)
     else:
       uid, event_data = ParseEvent(component)
       event = Event.get_by_key_name(uid)
@@ -697,8 +708,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 ############# Handler class helper #############
 ################################################
 
-@DeferFunctionDecorator
-def EmailAdmins(error_msg):
+def EmailAdmins(error_msg, defer_now=False):
   """Sends email to admins with the preferred message, with option to defer.
 
   Uses the template error_notify.templ to generate an email with the {error_msg}
@@ -706,7 +716,13 @@ def EmailAdmins(error_msg):
 
   Args:
     error_msg: A string containing an error to be sent to admins by email
+    defer_now: Boolean to determine whether or not a task should be spawned, by
+        default this is False.
   """
+  if defer_now:
+    defer(EmailAdmins, error_msg, defer_now=False, _url='/workers')
+    return
+
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
   subject = 'Persistent Cal Error: Admin Notify'
   body = JINJA2_RENDERER.render_template('error_notify.templ', error=error_msg)
@@ -741,7 +757,7 @@ def DeadlineDecorator(method):
       # raise the error, returning a 200 status code, hence killing the task.
       msg = 'Permanent failure attempting to execute task.'
       logging.exception(msg)
-      EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
+      EmailAdmins(msg, defer_now=True)
     except (runtime.DeadlineExceededError,
             urlfetch_errors.DeadlineExceededError):
       # pylint:disable-msg=W0142
@@ -813,7 +829,7 @@ class ExtendedHandler(webapp.RequestHandler):
     """
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
     logging.exception(traceback_info)
-    EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
+    EmailAdmins(traceback_info, defer_now=True)
 
     self.response.clear()
     self.response.set_status(500)
