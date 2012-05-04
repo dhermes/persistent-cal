@@ -47,10 +47,11 @@ CREDENTIALS = InitCredentials()
 
 def ForceUpdate(now_intervals):
   """Forces an update outside of a cron job for a list of update intervals."""
-  all_users = UserCal.all()  # pylint:disable-msg=E1101
-  for user_cal in all_users:
-    for now_interval in now_intervals:
-      if now_interval in user_cal.update_intervals:
-        UpdateUserSubscriptions(user_cal.calendars, user_cal,
-                                CREDENTIALS, defer_now=True)
-        break
+  legitimate_intervals = list(set(range(56)).intersection(now_intervals))
+  # pylint:disable-msg=E1101
+  matching_users = UserCal.gql('WHERE update_intervals IN :1',
+                               legitimate_intervals)
+  for user_cal in matching_users:
+    UpdateUserSubscriptions(user_cal.calendars, user_cal,
+                            CREDENTIALS, defer_now=True)
+    print user_cal
