@@ -29,7 +29,6 @@ import re
 import sys
 from time import sleep
 import traceback
-from urllib2 import urlopen
 
 # Third-party libraries
 from apiclient.discovery import build_from_document
@@ -76,10 +75,6 @@ DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
 FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
                    'browse/apiclient/contrib/calendar/future.json')
-
-
-# Global Setting
-urlfetch.set_default_fetch_deadline(60)
 
 
 class Error(Exception):
@@ -628,9 +623,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 
   now = datetime.datetime.utcnow()
 
-  import_feed = urlopen(link)
-  ical = Calendar.from_string(import_feed.read())
-  import_feed.close()
+  import_feed = urlfetch.fetch(link, deadline=60)
+  ical = Calendar.from_string(import_feed.content)
 
   start_index = 0
   if start_uid is not None:
