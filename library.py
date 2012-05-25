@@ -198,7 +198,8 @@ def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
       result = api_action(**kwargs).execute()
 
       if log_msg is None:
-        log_msg = '%s changed via %s' % (result['id'], http_verb)
+        log_msg = '{id_} changed via {verb}'.format(id_=result['id'],
+                                                    verb=http_verb)
       logging.info(log_msg)
 
       return result
@@ -233,7 +234,7 @@ def WhiteList(link):
     valid = True
 
     protocol = tripit_match.group('protocol')
-    transformed = 'http://%s' % link[len(protocol):]
+    transformed = 'http://{}'.format(link[len(protocol):])
 
   return valid, transformed
 
@@ -278,12 +279,13 @@ def ParseEvent(event):
 
   # Check description is formed as we expect
   if not uid.startswith('item-'):
-    target = ' is in %s ' % location
+    target = ' is in {} '.format(location)
     if description.count(target) != 1:
       raise UnexpectedDescription(description)
 
     # remove name from the description
-    description = 'In %s %s' % (location, description.split(target)[1])
+    description = 'In {location} {description}'.format(
+        location=location, description=description.split(target)[1])
 
   start_string = time_utils.FormatTime(event.get('dtstart').dt)
   start_keyword = 'dateTime' if start_string.endswith('Z') else 'date'
@@ -373,7 +375,7 @@ def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
   resp, _ = http.request(future_location)
 
   if resp.status != 404:
-    EmailAdmins('Future features JSON responded with %s.' % resp.status,
+    EmailAdmins('Future features JSON responded with {}.'.format(resp.status),
                 defer_now=True)
 
 
@@ -395,7 +397,8 @@ def DeferFunctionDecorator(method):
 
     Adds behavior for logging and deferred queue.
     """
-    logging.info('%s called with: %s', method.func_name, locals())
+    logging.info('{method.func_name} called with: {locals!r}'.format(
+        method=method, locals=locals()))
 
     defer_now = kwargs.pop('defer_now', False)
     if defer_now:
@@ -427,7 +430,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     defer_now: Boolean to determine whether or not a task should be spawned, by
         default this is False.
   """
-  logging.info('%s called with: %s', 'MonthlyCleanup', locals())
+  logging.info('MonthlyCleanup called with: {!r}'.format(locals()))
 
   if defer_now:
     defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
@@ -448,8 +451,8 @@ def MonthlyCleanup(relative_date, defer_now=False):
 
   today = datetime.date.today()
   if today - relative_date > datetime.timedelta(days=2):
-    msg = 'MonthlyCleanup called with bad date %s on %s.' % (relative_date,
-                                                             today)
+    msg = ('MonthlyCleanup called with bad date {relative_date} '
+           'on {today}.'.format(relative_date=relative_date, today=today))
     logging.info(msg)
     EmailAdmins(msg, defer_now=True)
     return
@@ -457,8 +460,8 @@ def MonthlyCleanup(relative_date, defer_now=False):
   prior_date_as_str = time_utils.FormatTime(prior_date)
   old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
   for event in old_events:
-    logging.info('%s removed from datastore. %s remains in calendar.',
-                 event, event.gcal_edit)
+    logging.info('{event} removed from datastore. {event.gcal_edit} '
+                 'remains in calendar.'.format(event=event))
     event.delete()
 
 
@@ -479,7 +482,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
         of the user that have not occurred yet (i.e. they are upcoming)
     credentials: An OAuth2Credentials object used to build a service object.
   """
-  logging.info('%s called with: %s', 'UpdateUpcoming', locals())
+  logging.info('UpdateUpcoming called with: {!r}'.format(locals()))
 
   upcoming.sort()
   if user_cal.upcoming != upcoming:
@@ -495,7 +498,8 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
           # If federated identity not set, User.__cmp__ only uses email
           event.attendees.remove(user_cal.owner)
           if not event.attendees:
-            log_msg = '%s deleted' % event.gcal_edit  # pylint:disable-msg=E1101
+            # pylint:disable-msg=E1101
+            log_msg = '{} deleted'.format(event.gcal_edit)
             # pylint:disable-msg=E1101
             AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
                              calendarId=CALENDAR_ID, eventId=event.gcal_edit)
@@ -544,7 +548,7 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
     defer_now: Boolean to determine whether or not a task should be spawned, by
         default this is False.
   """
-  logging.info('%s called with: %s', 'UpdateUserSubscriptions', locals())
+  logging.info('UpdateUserSubscriptions called with: {!r}'.format(locals()))
 
   if defer_now:
     defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
@@ -579,9 +583,10 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
         if is_upcoming:
           upcoming.append(uid)
         elif failed:
-          logging.info('silently failed operation on %s from %s', uid, link)
-          EmailAdmins('silently failed operation on %s from %s' % (uid, link),
-                      defer_now=True)
+          msg = 'silently failed operation on {uid} from {link}'.format(
+              uid=uid, link=link)
+          logging.info(msg)
+          EmailAdmins(msg, defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
     defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
@@ -613,7 +618,7 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
         failed is a boolean that is True if and only if the three attempts to
         add or update the event fail.
   """
-  logging.info('%s called with: %s', 'UpdateSubscription', locals())
+  logging.info('UpdateSubscription called with: {!r}'.format(locals()))
 
   valid, link = WhiteList(link)
   if not valid:
@@ -635,7 +640,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
 
   for component in ical.walk()[start_index:]:  # pylint:disable-msg=E1103
     if component.name != 'VEVENT':
-      msg = 'iCal at %s has unexpected event type %s' % (link, component.name)
+      msg = ('iCal at {link} has unexpected event type '
+             '{component.name}'.format(link=link, component=component))
       logging.info(msg)
       if component.name != 'VCALENDAR':
         EmailAdmins(msg, defer_now=True)
@@ -682,7 +688,8 @@ def UpdateSubscription(link, current_user, credentials, start_uid=None):
           event_data['attendees'] = event.attendee_emails()
 
           # Push all updates to calendar event
-          log_msg = '%s updated' % event.gcal_edit  # pylint:disable-msg=E1103
+          # pylint:disable-msg=E1103
+          log_msg = '{} updated'.format(event.gcal_edit)
           updated_event = AttemptAPIAction('update', log_msg=log_msg,
                                            credentials=credentials,
                                            calendarId=CALENDAR_ID,

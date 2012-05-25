@@ -61,7 +61,7 @@ class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
     return {self.keyword: self.value}
 
   def __repr__(self):
-    return 'TimeKeyword(%s)' % repr(self.as_dict())
+    return 'TimeKeyword({!r})'.format(self.as_dict())
 
 
 class TimeKeywordProperty(db.Property):
@@ -88,9 +88,9 @@ class TimeKeywordProperty(db.Property):
 
   def validate(self, value):  # pylint:disable-msg=C0103
     if value is not None and not isinstance(value, TimeKeyword):
-      raise db.BadValueError('Property %s must be convertible '
-                             'to a TimeKeyword instance (%s).' %
-                             (self.name, value))
+      raise db.BadValueError(
+          'Property {name} must be convertible to a '
+          'TimeKeyword instance ({value}).'.format(name=self.name, value=value))
     return super(TimeKeywordProperty, self).validate(value)
 
   def empty(self, value):  # pylint:disable-msg=C0103
@@ -127,7 +127,7 @@ class Event(db.Model):  # pylint:disable-msg=R0904
             'attendees': self.attendee_emails()}
 
   def __repr__(self):
-    return 'Event(name=%s)' % self.key().name()
+    return 'Event(name={})'.format(self.key().name())
 
 
 class UserCal(db.Model):  # pylint:disable-msg=R0904
@@ -142,4 +142,5 @@ class UserCal(db.Model):  # pylint:disable-msg=R0904
     super(UserCal, self).put()
 
   def __repr__(self):
-    return 'UserCal(owner=%s,name=%s)' % (self.owner.email(), self.key().name())
+    return 'UserCal(owner={owner},name={name})'.format(owner=self.owner.email(),
+                                                       name=self.key().name())

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (C) 2010-2011 Google Inc.
+# Copyright (C) 2010-2012 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,5 +23,6 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # http://code.google.com/appengine/docs/python/mail/emailmessagefields.html
 ADMIN_LIST = [('Robert Admin', 'admin@example.com')]
-ADMIN_LIST_AS_STR = ['%s <%s>' % (name, email) for name, email in ADMIN_LIST]
+ADMIN_LIST_AS_STR = ['{name} <{email}>'.format(name=name, email=email)
+                     for name, email in ADMIN_LIST]
 ADMINS_TO = ', '.join(ADMIN_LIST_AS_STR)
