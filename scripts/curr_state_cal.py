@@ -59,9 +59,6 @@ def main():
 
   raises Exception if an edit link is encountered more than once
   """
-  # TODO(dhermes) fix the import issue for the authorized client
-  # InitGCAL won't import since library.py has app engine imports
-  # GCAL = InitGCAL()
   gcal = gdata.calendar.client.CalendarClient(source='persistent-cal')
   auth_token = gdata.gauth.OAuthHmacToken(consumer_key=CONSUMER_KEY,
                                           consumer_secret=CONSUMER_SECRET,
@@ -73,7 +70,7 @@ def main():
          'vhoam1gb7uqqoqevu91liidi80%40group.calendar.google.com/private/full')
 
   feed = gcal.get_calendar_event_feed(uri=uri)
-  total_results = int(feed.total_results.text)  # TODO(dhermes) catch error here
+  total_results = int(feed.total_results.text)
   if total_results > 25:
     uri = '%s?max-results=%s' % (uri, total_results)
     feed = gcal.get_calendar_event_feed(uri=uri)

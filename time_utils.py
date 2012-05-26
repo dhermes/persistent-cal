@@ -124,7 +124,6 @@ def StringToDayString(time_as_str):
     return datetime_obj.strftime('%Y-%m-%d')
 
 
-# TODO(dhermes) remove this
 def RemoveTimezone(time_value):
   """Takes a datetime object and removes the timezone.
 

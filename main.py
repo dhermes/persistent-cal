@@ -148,11 +148,6 @@ class AddSubscription(ExtendedHandler):
       logging.info('Credentials initialized')
       CREDENTIALS = InitCredentials()
 
-    # TODO(dhermes) since user_cal has already been updated/added, be sure
-    #               this does not error out. If it does error out, catch the
-    #               error and still leave this function. Also within UpSc,
-    #               make sure all events that are added to GCal are also added
-    #               to the datastore.
     UpdateUserSubscriptions(user_cal, credentials=CREDENTIALS, defer_now=True)
     # pylint:disable-msg=E1103
     self.response.out.write(json.dumps(user_cal.calendars))

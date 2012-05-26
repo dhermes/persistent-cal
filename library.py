@@ -495,7 +495,6 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
     now = datetime.datetime.utcnow()
     for uid in user_cal.upcoming:
       if uid not in upcoming:
-        # TODO(dhermes) This branch should be its own function
         event = Event.get_by_key_name(uid)
 
         # pylint:disable-msg=E1103
@@ -513,7 +512,6 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
             event.delete()  # pylint:disable-msg=E1103
           else:
             # pylint:disable-msg=E1101
-            # TODO(dhermes) Account for failure below
             AttemptAPIAction('update', credentials=credentials,
                              calendarId=CALENDAR_ID,
                              eventId=event.gcal_edit,
@@ -666,7 +664,6 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
         cal_event = AttemptAPIAction('insert', credentials=credentials,
                                      calendarId=CALENDAR_ID, body=event_data)
 
-        # TODO(dhermes) add to failed queue to be updated by a cron
         if cal_event is None:
           yield (uid, False, True)
           continue

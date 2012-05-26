@@ -60,9 +60,6 @@ class MainHandler(ExtendedHandler):
     now_interval = ConvertToInterval(now)
     credentials = None
 
-    # TODO(dhermes) allow for DeadlineExceededError here as well, in the case
-    #               that current_users becomes too big to set off all of the
-    #               background tasks before the process can exit
     current_users = UserCal.gql('WHERE update_intervals = :1', now_interval)
     for user_cal in current_users:
       if user_cal.calendars:
