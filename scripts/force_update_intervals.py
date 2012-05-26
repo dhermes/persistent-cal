@@ -36,6 +36,9 @@ Note:
 __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
+# General libraries
+import os
+
 # App specific libraries
 from library import InitCredentials
 from library import UpdateUserSubscriptions
@@ -43,6 +46,9 @@ from models import UserCal
 
 
 CREDENTIALS = InitCredentials()
+
+
+os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
 
 
 def ForceUpdate(now_intervals):

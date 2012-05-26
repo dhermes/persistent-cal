@@ -23,7 +23,7 @@ def switch_contents(fi):
     fh.write(git_included_contents)
 
 
-protected_files = ['secret_key.py', 'admins.py', 'calendar.dat']
+protected_files = ['secret_key.py', 'admins.py']
 for fi in protected_files:
   switch_contents(fi)
   os.system('git add %s' % os.path.join(project_root, fi))

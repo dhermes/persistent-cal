@@ -24,12 +24,20 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 # General libraries
 import json
 
+# Third-party libraries
+from oauth2client.appengine import CredentialsProperty
+
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import db
 
 # App specific libraries
 import time_utils
+
+
+class Credentials(db.Model):
+  """A Credentials class for storing calendar credentials."""
+  credentials = CredentialsProperty()
 
 
 class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
@@ -106,6 +114,7 @@ class Event(db.Model):  # pylint:disable-msg=R0904
   summary = db.StringProperty(required=True)
   attendees = db.ListProperty(users.User, required=True)
   gcal_edit = db.StringProperty(required=True)
+  sequence = db.IntegerProperty(default=0)
 
   @db.ComputedProperty
   def end_date(self):  # pylint:disable-msg=C0103
@@ -124,6 +133,7 @@ class Event(db.Model):  # pylint:disable-msg=R0904
             'location': self.location,
             'description': self.description,
             'id': self.gcal_edit,
+            'sequence': self.sequence,
             'attendees': self.attendee_emails()}
 
   def __repr__(self):

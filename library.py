@@ -36,7 +36,7 @@ from apiclient.discovery import DISCOVERY_URI
 from apiclient.errors import HttpError
 import httplib2
 from icalendar import Calendar
-from oauth2client.file import Storage
+from oauth2client.appengine import StorageByKeyName
 import uritemplate
 
 # App engine specific libraries
@@ -52,6 +52,7 @@ from webapp2_extras import jinja2
 
 # App specific libraries
 from admins import ADMINS_TO
+from models import Credentials
 from models import Event
 from models import TimeKeyword
 import secret_key
@@ -59,7 +60,7 @@ import time_utils
 
 
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
-CREDENTIALS_FILENAME = 'calendar.dat'
+CREDENTIALS_KEYNAME = 'calendar.dat'
 RESPONSES = {1: ['once a week', 'week'],
              4: ['every two days', 'two-day'],
              7: ['once a day', 'day'],
@@ -120,22 +121,21 @@ def UpdateString(update_intervals):
     return json.dumps(RESPONSES[length])
 
 
-def InitCredentials(filename=CREDENTIALS_FILENAME):
+def InitCredentials(keyname=CREDENTIALS_KEYNAME):
   """Initializes an OAuth2Credentials object from a file.
 
   Args:
-    filename: The location of the pickled contents of the
-        OAuth2Credentials object.
+    keyname: The key name of the credentials object in the data store.
 
   Returns:
     An OAuth2Credentials object.
   """
-  storage = Storage(filename)
+  storage = StorageByKeyName(Credentials, keyname, 'credentials')
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
     EmailAdmins('Credentials in calendar resource not good.', defer_now=True)
-    raise CredentialsLoadError('No credentials retrieved from calendar.dat')
+    raise CredentialsLoadError('No credentials retrieved.')
 
   return credentials
 
@@ -146,7 +146,7 @@ def InitService(credentials=None):
   Args:
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is None, attempt to get credentials from
-        calendar.dat file.
+        CREDENTIALS_KEYNAME.
 
   Returns:
     A Resource object intended for making calls to an Apiary API.
@@ -313,7 +313,7 @@ def RetrieveCalendarDiscoveryDoc(credentials=None):
   Args:
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is None, attempt to get credentials from
-        calendar.dat file.
+        CREDENTIALS_KEYNAME.
 
   Returns:
     A tuple (success, content) where success is a boolean describing if the doc
@@ -349,7 +349,7 @@ def CheckCalendarDiscoveryDoc(credentials=None):
   Args:
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is None, attempt to get credentials from
-        calendar.dat file.
+        CREDENTIALS_KEYNAME.
   """
   success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
       credentials=credentials)
@@ -486,7 +486,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
         of the user that have not occurred yet (i.e. they are upcoming)
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from calendar.dat file.
+        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
   """
   logging.info('UpdateUpcoming called with: {!r}'.format(locals()))
 
@@ -539,7 +539,7 @@ def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
     user_cal: a UserCal object that will have upcoming subscriptions updated
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from calendar.dat file.
+        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
     links: a list of URLs to the .ics subscription feeds. This is None by
         default, in which case user_cal.calendars is used.
     link_index: a placeholder index within the list of links which is 0 by
@@ -616,7 +616,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
     current_user: a User instance corresponding to the user that is updating
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from calendar.dat file.
+        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
     start_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of
