@@ -41,7 +41,7 @@ def main():
     flow = OAuth2WebServerFlow(
         client_id=secret_key.CLIENT_ID,
         client_secret=secret_key.CLIENT_SECRET,
-        scope='https://www.google.com/calendar/feeds/',
+        scope='https://www.googleapis.com/auth/calendar',
         user_agent='persistent-cal-auth')
 
     credentials = run(flow, storage)
