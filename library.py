@@ -642,7 +642,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
   now = datetime.datetime.utcnow()
 
   import_feed = urlfetch.fetch(link, deadline=60)
-  ical = Calendar.from_string(import_feed.content)
+  ical = Calendar.from_ical(import_feed.content)
 
   start_index = 0
   if start_uid is not None:
