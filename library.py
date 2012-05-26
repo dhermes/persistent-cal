@@ -295,9 +295,13 @@ def ParseEvent(event):
   end_keyword = 'dateTime' if end_string.endswith('Z') else 'date'
   end = {end_keyword: end_string}
 
+  summary = unicode(event.get('summary'))
+  if not summary:
+    summary = 'None'
+
   event_data = {'start': start,
                 'end': end,
-                'summary': unicode(event.get('summary')),
+                'summary': summary,
                 'location': location,
                 'description': description}
   return uid, event_data
