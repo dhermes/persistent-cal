@@ -23,7 +23,7 @@ should be defined in this file.
 __author__ = 'jcgregorio@google.com (Joe Gregorio)'
 
 
-from anyjson import simplejson
+from oauth2client.anyjson import simplejson
 
 
 class Error(Exception):
@@ -70,10 +70,54 @@ class UnknownLinkType(Error):
   """Link type unknown or unexpected."""
   pass
 
+
+class UnknownApiNameOrVersion(Error):
+  """No API with that name and version exists."""
+  pass
+
+
 class UnacceptableMimeTypeError(Error):
   """That is an unacceptable mimetype for this operation."""
   pass
 
+
 class MediaUploadSizeError(Error):
   """Media is larger than the method can accept."""
   pass
+
+
+class ResumableUploadError(Error):
+  """Error occured during resumable upload."""
+  pass
+
+
+class BatchError(HttpError):
+  """Error occured during batch operations."""
+
+  def __init__(self, reason, resp=None, content=None):
+    self.resp = resp
+    self.content = content
+    self.reason = reason
+
+  def __repr__(self):
+      return '<BatchError %s "%s">' % (self.resp.status, self.reason)
+
+  __str__ = __repr__
+
+
+class UnexpectedMethodError(Error):
+  """Exception raised by RequestMockBuilder on unexpected calls."""
+
+  def __init__(self, methodId=None):
+    """Constructor for an UnexpectedMethodError."""
+    super(UnexpectedMethodError, self).__init__(
+        'Received unexpected call %s' % methodId)
+
+
+class UnexpectedBodyError(Error):
+  """Exception raised by RequestMockBuilder on unexpected bodies."""
+
+  def __init__(self, expected, provided):
+    """Constructor for an UnexpectedMethodError."""
+    super(UnexpectedBodyError, self).__init__(
+        'Expected: [%s] - Provided: [%s]' % (expected, provided))

@@ -25,31 +25,32 @@ __all__ = ['run']
 
 import BaseHTTPServer
 import gflags
-import logging
 import socket
 import sys
+import webbrowser
 
 from client import FlowExchangeError
+from client import OOB_CALLBACK_URN
 
 try:
-    from urlparse import parse_qsl
+  from urlparse import parse_qsl
 except ImportError:
-    from cgi import parse_qsl
+  from cgi import parse_qsl
 
 
 FLAGS = gflags.FLAGS
 
 gflags.DEFINE_boolean('auth_local_webserver', True,
-                     ('Run a local web server to handle redirects during '
+                      ('Run a local web server to handle redirects during '
                        'OAuth authorization.'))
 
 gflags.DEFINE_string('auth_host_name', 'localhost',
                      ('Host name to use when running a local web server to '
-                       'handle redirects during OAuth authorization.'))
+                      'handle redirects during OAuth authorization.'))
 
 gflags.DEFINE_multi_int('auth_host_port', [8080, 8090],
-                     ('Port to use when running a local web server to '
-                       'handle redirects during OAuth authorization.'))
+                        ('Port to use when running a local web server to '
+                         'handle redirects during OAuth authorization.'))
 
 
 class ClientRedirectServer(BaseHTTPServer.HTTPServer):
@@ -69,7 +70,7 @@ class ClientRedirectHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   """
 
   def do_GET(s):
-    """Handle a GET request
+    """Handle a GET request.
 
     Parses the query parameters and prints a message
     if the flow has completed. Note that we can't detect
@@ -90,12 +91,14 @@ class ClientRedirectHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     pass
 
 
-def run(flow, storage):
+def run(flow, storage, http=None):
   """Core code for a command-line application.
 
   Args:
     flow: Flow, an OAuth 2.0 Flow to step through.
     storage: Storage, a Storage to store the credential in.
+    http: An instance of httplib2.Http.request
+         or something that acts like it.
 
   Returns:
     Credentials, the obtained credential.
@@ -106,8 +109,8 @@ def run(flow, storage):
     for port in FLAGS.auth_host_port:
       port_number = port
       try:
-        httpd = BaseHTTPServer.HTTPServer((FLAGS.auth_host_name, port),
-            ClientRedirectHandler)
+        httpd = ClientRedirectServer((FLAGS.auth_host_name, port),
+                                     ClientRedirectHandler)
       except socket.error, e:
         pass
       else:
@@ -118,37 +121,46 @@ def run(flow, storage):
   if FLAGS.auth_local_webserver:
     oauth_callback = 'http://%s:%s/' % (FLAGS.auth_host_name, port_number)
   else:
-    oauth_callback = 'oob'
+    oauth_callback = OOB_CALLBACK_URN
   authorize_url = flow.step1_get_authorize_url(oauth_callback)
 
-  print 'Go to the following link in your browser:'
-  print authorize_url
-  print
   if FLAGS.auth_local_webserver:
+    webbrowser.open(authorize_url, new=1, autoraise=True)
+    print 'Your browser has been opened to visit:'
+    print
+    print '    ' + authorize_url
+    print
     print 'If your browser is on a different machine then exit and re-run this'
-    print 'application with the command-line parameter --noauth_local_webserver.'
+    print 'application with the command-line parameter '
+    print
+    print '  --noauth_local_webserver'
+    print
+  else:
+    print 'Go to the following link in your browser:'
+    print
+    print '    ' + authorize_url
     print
 
-
+  code = None
   if FLAGS.auth_local_webserver:
     httpd.handle_request()
     if 'error' in httpd.query_params:
       sys.exit('Authentication request was rejected.')
     if 'code' in httpd.query_params:
       code = httpd.query_params['code']
+    else:
+      print 'Failed to find "code" in the query parameters of the redirect.'
+      sys.exit('Try running with --noauth_local_webserver.')
   else:
-    accepted = 'n'
-    while accepted.lower() == 'n':
-      accepted = raw_input('Have you authorized me? (y/n) ')
-    code = raw_input('What is the verification code? ').strip()
+    code = raw_input('Enter verification code: ').strip()
 
   try:
-    credentials = flow.step2_exchange(code)
-  except FlowExchangeError:
-    sys.exit('The authentication has failed.')
+    credential = flow.step2_exchange(code, http)
+  except FlowExchangeError, e:
+    sys.exit('Authentication has failed: %s' % e)
 
-  storage.put(credentials)
-  credentials.set_store(storage.put)
-  print "You have successfully authenticated."
+  storage.put(credential)
+  credential.set_store(storage)
+  print 'Authentication successful.'
 
-  return credentials
+  return credential

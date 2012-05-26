@@ -31,8 +31,8 @@ class CredentialsField(models.Field):
 
   __metaclass__ = models.SubfieldBase
 
-  def db_type(self, connection=None):
-    return 'VARCHAR'
+  def get_internal_type(self):
+    return "TextField"
 
   def to_python(self, value):
     if not value:
@@ -41,7 +41,7 @@ class CredentialsField(models.Field):
       return value
     return pickle.loads(base64.b64decode(value))
 
-  def get_db_prep_value(self, value):
+  def get_db_prep_value(self, value, connection, prepared=False):
     return base64.b64encode(pickle.dumps(value))
 
 
@@ -49,8 +49,8 @@ class FlowField(models.Field):
 
   __metaclass__ = models.SubfieldBase
 
-  def db_type(self, connection=None):
-    return 'VARCHAR'
+  def get_internal_type(self):
+    return "TextField"
 
   def to_python(self, value):
     if value is None:
@@ -59,7 +59,7 @@ class FlowField(models.Field):
       return value
     return pickle.loads(base64.b64decode(value))
 
-  def get_db_prep_value(self, value):
+  def get_db_prep_value(self, value, connection, prepared=False):
     return base64.b64encode(pickle.dumps(value))
 
 
@@ -86,7 +86,7 @@ class Storage(BaseStorage):
     self.key_value = key_value
     self.property_name = property_name
 
-  def get(self):
+  def locked_get(self):
     """Retrieve Credential from datastore.
 
     Returns:
@@ -99,10 +99,10 @@ class Storage(BaseStorage):
     if len(entities) > 0:
       credential = getattr(entities[0], self.property_name)
       if credential and hasattr(credential, 'set_store'):
-        credential.set_store(self.put)
+        credential.set_store(self)
     return credential
 
-  def put(self, credentials):
+  def locked_put(self, credentials):
     """Write a Credentials to the datastore.
 
     Args:
@@ -112,3 +112,9 @@ class Storage(BaseStorage):
     entity = self.model_class(**args)
     setattr(entity, self.property_name, credentials)
     entity.save()
+
+  def locked_delete(self):
+    """Delete Credentials from the datastore."""
+
+    query = {self.key_name: self.key_value}
+    entities = self.model_class.objects.filter(**query).delete()
