@@ -68,7 +68,8 @@ class MainHandler(ExtendedHandler):
       if user_cal.calendars:
         if credentials is None:
           credentials = InitCredentials()
-        UpdateUserSubscriptions(user_cal, credentials, defer_now=True)
+        UpdateUserSubscriptions(user_cal, credentials=credentials,
+                                defer_now=True)
 
 
 class CheckDiscoveryDoc(ExtendedHandler):

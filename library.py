@@ -469,7 +469,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     event.delete()
 
 
-def UpdateUpcoming(user_cal, upcoming, credentials):
+def UpdateUpcoming(user_cal, upcoming, credentials=None):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
   If the new upcoming events list is different from that on the user_cal, it
@@ -485,6 +485,8 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
     upcoming: a list of UID strings representing events in the subscribed feeds
         of the user that have not occurred yet (i.e. they are upcoming)
     credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is the default value of None, future
+        methods will attempt to get credentials from calendar.dat file.
   """
   logging.info('UpdateUpcoming called with: {!r}'.format(locals()))
 
@@ -523,8 +525,9 @@ def UpdateUpcoming(user_cal, upcoming, credentials):
 
 
 # pylint:disable-msg=R0913
-def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
-                            upcoming=None, last_used_uid=None, defer_now=False):
+def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
+                            link_index=0, upcoming=None,
+                            last_used_uid=None, defer_now=False):
   """Updates a list of calendar subscriptions for a user.
 
   Loops through each subscription URL in links (or user_cal.calendars) and calls
@@ -537,6 +540,8 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
   Args:
     user_cal: a UserCal object that will have upcoming subscriptions updated
     credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is the default value of None, future
+        methods will attempt to get credentials from calendar.dat file.
     links: a list of URLs to the .ics subscription feeds. This is None by
         default, in which case user_cal.calendars is used.
     link_index: a placeholder index within the list of links which is 0 by
@@ -555,8 +560,8 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
   logging.info('UpdateUserSubscriptions called with: {!r}'.format(locals()))
 
   if defer_now:
-    defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
-          link_index=link_index, upcoming=upcoming,
+    defer(UpdateUserSubscriptions, user_cal, credentials=credentials,
+          links=links, link_index=link_index, upcoming=upcoming,
           last_used_uid=last_used_uid, defer_now=False, _url='/workers')
     return
 
@@ -579,9 +584,11 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
       # middle of the feed for the first link in {links}
       if index == 0 and last_used_uid is not None:
         uid_generator = UpdateSubscription(link, user_cal.owner,
-                                           credentials, start_uid=last_used_uid)
+                                           credentials=credentials,
+                                           start_uid=last_used_uid)
       else:
-        uid_generator = UpdateSubscription(link, user_cal.owner, credentials)
+        uid_generator = UpdateSubscription(link, user_cal.owner,
+                                           credentials=credentials)
 
       for uid, is_upcoming, failed in uid_generator:
         if is_upcoming:
@@ -593,23 +600,25 @@ def UpdateUserSubscriptions(user_cal, credentials, links=None, link_index=0,
           EmailAdmins(msg, defer_now=True)
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
-    defer(UpdateUserSubscriptions, user_cal, credentials, links=links,
-          link_index=index, upcoming=upcoming, last_used_uid=uid,
+    defer(UpdateUserSubscriptions, user_cal, credentials=credentials,
+          links=links, link_index=index, upcoming=upcoming, last_used_uid=uid,
           defer_now=False, _url='/workers')
     return
 
   # If the loop completes without timing out
-  defer(UpdateUpcoming, user_cal, upcoming, credentials, _url='/workers')
-  return
+  defer(UpdateUpcoming, user_cal, upcoming,
+        credentials=credentials, _url='/workers')
 
 
-def UpdateSubscription(link, current_user, credentials, start_uid=None):
+def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
   """Updates the GCal instance with the events in link for the current_user.
 
   Args:
     link: Link to calendar feed being subscribed to
     current_user: a User instance corresponding to the user that is updating
     credentials: An OAuth2Credentials object used to build a service object.
+        In the case the credentials is the default value of None, future
+        methods will attempt to get credentials from calendar.dat file.
     start_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of
