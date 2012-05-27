@@ -43,7 +43,7 @@ class AttendeesNotUpdated(Error):
   """Error corresponding to an unexpected value of Event.attendees."""
 
 
-class Credentials(db.Model):
+class Credentials(db.Model):  # pylint:disable-msg=R0904
   """A Credentials class for storing calendar credentials."""
   credentials = CredentialsProperty()
 

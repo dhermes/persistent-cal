@@ -695,7 +695,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
         event_data['id'] = event.gcal_edit
         event_data['attendees'] = event.attendee_emails()
         if event_data['sequence'] is None:
-          event_data['sequence'] = event.sequence
+          event_data['sequence'] = event.sequence  # pylint:disable-msg=E1103
 
         # We need to make changes for new event data or a new owner
         if (current_user not in event.attendees or

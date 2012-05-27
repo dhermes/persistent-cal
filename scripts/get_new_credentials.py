@@ -26,8 +26,6 @@ http://code.google.com/p/google-api-python-client/wiki/OAuth2#Command-Line
 import os
 
 # Third-party libraries
-from apiclient.discovery import build
-import httplib2
 from oauth2client.appengine import StorageByKeyName
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
@@ -41,6 +39,10 @@ os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
 
 
 def main():
+  """Main function. Attempts to get credentials and runs OAuth2 if invalid.
+
+  Must be run from within remote_api.
+  """
   storage = StorageByKeyName(Credentials, 'calendar.dat', 'credentials')
   credentials = storage.get()
 
@@ -52,6 +54,8 @@ def main():
         user_agent='persistent-cal-auth')
 
     credentials = run(flow, storage)
+
+  return credentials
 
 
 if __name__ == '__main__':

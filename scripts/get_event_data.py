@@ -34,6 +34,10 @@ os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
 
 
 def main():
+  """Main function. Retrieves all events from the datastore and GCal.
+
+  Must be run from within remote_api.
+  """
   gcal_edits = []
   for event in Event.all():
     gcal_edits.append(event.gcal_edit)
