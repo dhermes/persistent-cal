@@ -299,7 +299,7 @@ def ParseEvent(event):
   if not summary:
     summary = 'None'
 
-  sequence = event.get('sequence', 0)
+  sequence = event.get('sequence', None)
 
   event_data = {'start': start,
                 'end': end,
@@ -694,6 +694,8 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
         # Spoof existing datapoints from the Event object
         event_data['id'] = event.gcal_edit
         event_data['attendees'] = event.attendee_emails()
+        if event_data['sequence'] is None:
+          event_data['sequence'] = event.sequence
 
         # We need to make changes for new event data or a new owner
         if (current_user not in event.attendees or
