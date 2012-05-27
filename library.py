@@ -721,8 +721,10 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
             yield (uid, False, True)
             continue
           else:
-            sequence = updated_event.get('sequence', event_data['sequence'])
-            event.sequence = sequence
+            sequence = updated_event.get('sequence', None)
+            if sequence is not None:
+              event_data['sequence'] = sequence
+            event.update_from_dict(event_data)
             event.put()  # pylint:disable-msg=E1103
 
         # execution has successfully completed

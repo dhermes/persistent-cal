@@ -35,6 +35,14 @@ from google.appengine.ext import db
 import time_utils
 
 
+class Error(Exception):
+  """Base error class for model methods."""
+
+
+class AttendeesNotUpdated(Error):
+  """Error corresponding to an unexpected value of Event.attendees."""
+
+
 class Credentials(db.Model):
   """A Credentials class for storing calendar credentials."""
   credentials = CredentialsProperty()
@@ -135,6 +143,29 @@ class Event(db.Model):  # pylint:disable-msg=R0904
             'id': self.gcal_edit,
             'sequence': self.sequence,
             'attendees': self.attendee_emails()}
+
+  def update_from_dict(self, event_data):  # pylint:disable-msg=C0103
+    """Updates the instance using data from a dictionary."""
+    as_dict = self.as_dict()
+
+    for key, value in event_data.iteritems():
+      if value != as_dict[key]:
+        value_to_set = value
+        attr_to_set = key
+        if key in ('start', 'end'):
+          value_to_set = TimeKeyword.from_dict(value)
+        elif key == 'attendees':
+          # Should be done when User is available at an earlier stage
+          msg = ('update_from_dict passed {attendees!r} when model had it set '
+                 'as {model_attendees}'.format(attendees=value,
+                                               model_attendees=as_dict[key]))
+          raise AttendeesNotUpdated(msg)
+        elif key == 'id':
+          attr_to_set = 'gcal_edit'
+
+        setattr(self, attr_to_set, value_to_set)
+
+    return self
 
   def __repr__(self):
     return 'Event(name={})'.format(self.key().name())
