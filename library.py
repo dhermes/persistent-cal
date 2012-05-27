@@ -299,11 +299,14 @@ def ParseEvent(event):
   if not summary:
     summary = 'None'
 
+  sequence = event.get('sequence', 0)
+
   event_data = {'start': start,
                 'end': end,
                 'summary': summary,
                 'location': location,
-                'description': description}
+                'description': description,
+                'sequence': sequence}
   return uid, event_data
 
 
@@ -512,10 +515,12 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
             event.delete()  # pylint:disable-msg=E1103
           else:
             # pylint:disable-msg=E1101
-            AttemptAPIAction('update', credentials=credentials,
-                             calendarId=CALENDAR_ID,
-                             eventId=event.gcal_edit,
-                             body=event.as_dict())
+            updated_event = AttemptAPIAction('update', credentials=credentials,
+                                             calendarId=CALENDAR_ID,
+                                             eventId=event.gcal_edit,
+                                             body=event.as_dict())
+            sequence = updated_event.get('sequence', event.sequence)
+            event.sequence = sequence
             event.put()
 
     user_cal.upcoming = upcoming
@@ -669,6 +674,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
           continue
 
         gcal_edit = cal_event['id']
+        sequence = cal_event.get('sequence', 0)
         event = Event(key_name=uid,
                       description=db.Text(event_data['description']),
                       start=TimeKeyword.from_dict(event_data['start']),
@@ -676,7 +682,8 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
                       location=event_data['location'],
                       summary=event_data['summary'],
                       attendees=[current_user],
-                      gcal_edit=gcal_edit)
+                      gcal_edit=gcal_edit,
+                      sequence=sequence)
         event.put()
 
         # execution has successfully completed
@@ -712,6 +719,8 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
             yield (uid, False, True)
             continue
           else:
+            sequence = updated_event.get('sequence', event_data['sequence'])
+            event.sequence = sequence
             event.put()  # pylint:disable-msg=E1103
 
         # execution has successfully completed

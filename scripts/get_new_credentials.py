@@ -22,19 +22,26 @@ http://code.google.com/p/google-api-python-client/wiki/OAuth2#Command-Line
 """
 
 
+# General libraries
+import os
+
 # Third-party libraries
 from apiclient.discovery import build
 import httplib2
-from oauth2client.file import Storage
+from oauth2client.appengine import StorageByKeyName
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
 
 # App specific libraries
+from models import Credentials
 import secret_key
 
 
+os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
+
+
 def main():
-  storage = Storage('calendar.dat')
+  storage = StorageByKeyName(Credentials, 'calendar.dat', 'credentials')
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
