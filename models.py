@@ -32,15 +32,8 @@ from google.appengine.api import users
 from google.appengine.ext import db
 
 # App specific libraries
+from exceptions import AttendeesNotUpdated
 import time_utils
-
-
-class Error(Exception):
-  """Base error class for model methods."""
-
-
-class AttendeesNotUpdated(Error):
-  """Error corresponding to an unexpected value of Event.attendees."""
 
 
 class Credentials(db.Model):  # pylint:disable-msg=R0904

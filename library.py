@@ -52,6 +52,10 @@ from webapp2_extras import jinja2
 
 # App specific libraries
 from admins import ADMINS_TO
+from exceptions import BadInterval
+from exceptions import CredentialsLoadError
+from exceptions import MissingUID
+from exceptions import UnexpectedDescription
 from models import Credentials
 from models import Event
 from models import TimeKeyword
@@ -76,26 +80,6 @@ DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
 FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
                    'browse/apiclient/contrib/calendar/future.json')
-
-
-class Error(Exception):
-  """Base error class for library functions."""
-
-
-class BadInterval(Error):
-  """Error corresponding to an unanticipated number of update intervals."""
-
-
-class MissingUID(Error):
-  """Error corresponding to missing UID in an event."""
-
-
-class UnexpectedDescription(Error):
-  """Error corresponding to an unexpected event description."""
-
-
-class CredentialsLoadError(Error):
-  """Error when credentials are not loaded correctly from a specified file."""
 
 
 def UpdateString(update_intervals):
