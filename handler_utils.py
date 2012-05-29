@@ -22,11 +22,14 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
+import logging
 import sys
 import traceback
 
 # App engine specific libraries
+from google.appengine.api import mail
 from google.appengine.api import urlfetch_errors
+from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
 from google.appengine.ext import webapp
 from google.appengine import runtime

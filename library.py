@@ -34,12 +34,10 @@ import httplib2
 from icalendar import Calendar
 
 # App engine specific libraries
-from google.appengine.api import mail
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_errors
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
-from google.appengine.ext import webapp
 from google.appengine import runtime
 
 # App specific libraries
@@ -50,7 +48,6 @@ from google_api_utils import InitService
 from handler_utils import EmailAdmins
 from models import Event
 from models import TimeKeyword
-import secret_key
 import time_utils
 
 
