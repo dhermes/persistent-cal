@@ -52,10 +52,10 @@ from webapp2_extras import jinja2
 
 # App specific libraries
 from admins import ADMINS_TO
-from exceptions import BadInterval
-from exceptions import CredentialsLoadError
-from exceptions import MissingUID
-from exceptions import UnexpectedDescription
+from custom_exceptions import BadInterval
+from custom_exceptions import CredentialsLoadError
+from custom_exceptions import MissingUID
+from custom_exceptions import UnexpectedDescription
 from models import Credentials
 from models import Event
 from models import TimeKeyword

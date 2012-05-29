@@ -32,7 +32,7 @@ from google.appengine.api import users
 from google.appengine.ext import db
 
 # App specific libraries
-from exceptions import AttendeesNotUpdated
+from custom_exceptions import AttendeesNotUpdated
 import time_utils
 
 
