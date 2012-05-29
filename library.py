@@ -26,18 +26,12 @@ import datetime
 import json
 import logging
 import re
-import sys
 from time import sleep
-import traceback
 
 # Third-party libraries
-from apiclient.discovery import build_from_document
-from apiclient.discovery import DISCOVERY_URI
 from apiclient.errors import HttpError
 import httplib2
 from icalendar import Calendar
-from oauth2client.appengine import StorageByKeyName
-import uritemplate
 
 # App engine specific libraries
 from google.appengine.api import mail
@@ -45,18 +39,15 @@ from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_errors
 from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
-from google.appengine.ext.deferred import PermanentTaskFailure
 from google.appengine.ext import webapp
 from google.appengine import runtime
-from webapp2_extras import jinja2
 
 # App specific libraries
-from admins import ADMINS_TO
 from custom_exceptions import BadInterval
-from custom_exceptions import CredentialsLoadError
 from custom_exceptions import MissingUID
 from custom_exceptions import UnexpectedDescription
-from models import Credentials
+from google_api_utils import InitService
+from handler_utils import EmailAdmins
 from models import Event
 from models import TimeKeyword
 import secret_key
@@ -64,22 +55,12 @@ import time_utils
 
 
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
-CREDENTIALS_KEYNAME = 'calendar.dat'
 RESPONSES = {1: ['once a week', 'week'],
              4: ['every two days', 'two-day'],
              7: ['once a day', 'day'],
              14: ['twice a day', 'half-day'],
              28: ['every six hours', 'six-hrs'],
              56: ['every three hours', 'three-hrs']}
-# Without using the kwarg 'app' in get_jinja2, webapp2.get_app() is
-# used, which returns the active app instance.
-# [Reference: http://webapp-improved.appspot.com/api/webapp2.html]
-JINJA2_RENDERER = jinja2.get_jinja2()
-RENDERED_500_PAGE = JINJA2_RENDERER.render_template('500.html')
-DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
-DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
-FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
-                   'browse/apiclient/contrib/calendar/future.json')
 
 
 def UpdateString(update_intervals):
@@ -103,55 +84,6 @@ def UpdateString(update_intervals):
     raise BadInterval(length)
   else:
     return json.dumps(RESPONSES[length])
-
-
-def InitCredentials(keyname=CREDENTIALS_KEYNAME):
-  """Initializes an OAuth2Credentials object from a file.
-
-  Args:
-    keyname: The key name of the credentials object in the data store.
-
-  Returns:
-    An OAuth2Credentials object.
-  """
-  storage = StorageByKeyName(Credentials, keyname, 'credentials')
-  credentials = storage.get()
-
-  if credentials is None or credentials.invalid == True:
-    EmailAdmins('Credentials in calendar resource not good.', defer_now=True)
-    raise CredentialsLoadError('No credentials retrieved.')
-
-  return credentials
-
-
-def InitService(credentials=None):
-  """Initializes a service object to make calendar requests.
-
-  Args:
-    credentials: An OAuth2Credentials object used to build a service object.
-        In the case the credentials is None, attempt to get credentials from
-        CREDENTIALS_KEYNAME.
-
-  Returns:
-    A Resource object intended for making calls to an Apiary API.
-
-  Raises:
-    CredentialsLoadError in the case that no credentials are passed in and they
-        can't be loaded from the specified file
-  """
-  if credentials is None:
-    credentials = InitCredentials()
-
-  http = httplib2.Http()
-  http = credentials.authorize(http)
-
-  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
-    cached_discovery_doc = fh.read()
-
-  return build_from_document(cached_discovery_doc,
-                             DISCOVERY_URI,
-                             http=http,
-                             developerKey=secret_key.DEVELOPER_KEY)
 
 
 def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
@@ -294,82 +226,6 @@ def ParseEvent(event):
   return uid, event_data
 
 
-def RetrieveCalendarDiscoveryDoc(credentials=None):
-  """Retrieves the discovery doc for the calendar API service.
-
-  Args:
-    credentials: An OAuth2Credentials object used to build a service object.
-        In the case the credentials is None, attempt to get credentials from
-        CREDENTIALS_KEYNAME.
-
-  Returns:
-    A tuple (success, content) where success is a boolean describing if the doc
-        was retrieved successfully and content (if success) contains the JSON
-        string contents of the discovery doc
-  """
-  if credentials is None:
-    credentials = InitCredentials()
-
-  http = httplib2.Http()
-  http = credentials.authorize(http)
-
-  requested_url = uritemplate.expand(DISCOVERY_URI, DISCOVERY_DOC_PARAMS)
-  resp, content = http.request(requested_url)
-
-  success = False
-  if resp.status < 400:
-    try:
-      json.loads(content)
-      success = True
-    except ValueError:
-      pass
-
-  return success, content
-
-
-def CheckCalendarDiscoveryDoc(credentials=None):
-  """Checks a cached discovery doc against the current doc for calendar service.
-
-  If the discovery can't be retrieved or the cached copy disagrees with the
-  current version, an email is sent to the administrators.
-
-  Args:
-    credentials: An OAuth2Credentials object used to build a service object.
-        In the case the credentials is None, attempt to get credentials from
-        CREDENTIALS_KEYNAME.
-  """
-  success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
-      credentials=credentials)
-
-  if not success:
-    EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
-    return
-
-  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
-    cached_discovery_doc = fh.read()
-
-  if cached_discovery_doc != current_discovery_doc:
-    EmailAdmins('Current discovery doc disagrees with cached version.',
-                defer_now=True)
-
-
-def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION):
-  """Checks if a future features doc for the calendar service exists.
-
-  If a future features doc is detected, an email is sent to the administrators.
-
-  Args:
-    future_location: A string URL where the future features doc would reside if
-        it existed. This defaults to the constant FUTURE_LOCATION.
-  """
-  http = httplib2.Http()
-  resp, _ = http.request(future_location)
-
-  if resp.status != 404:
-    EmailAdmins('Future features JSON responded with {}.'.format(resp.status),
-                defer_now=True)
-
-
 def DeferFunctionDecorator(method):
   """Decorator that allows a function to accept a defer_now argument.
 
@@ -473,7 +329,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
         of the user that have not occurred yet (i.e. they are upcoming)
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
+        methods will attempt to get credentials from the default credentials.
   """
   logging.info('UpdateUpcoming called with: {!r}'.format(locals()))
 
@@ -528,7 +384,7 @@ def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
     user_cal: a UserCal object that will have upcoming subscriptions updated
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
+        methods will attempt to get credentials from the default credentials.
     links: a list of URLs to the .ics subscription feeds. This is None by
         default, in which case user_cal.calendars is used.
     link_index: a placeholder index within the list of links which is 0 by
@@ -605,7 +461,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
     current_user: a User instance corresponding to the user that is updating
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is the default value of None, future
-        methods will attempt to get credentials from CREDENTIALS_KEYNAME.
+        methods will attempt to get credentials from the default credentials.
     start_uid: a placeholder UID which is None by default. This is intended
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of
@@ -715,134 +571,3 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
         yield (uid,
                time_utils.RemoveTimezone(component.get('dtend').dt) > now,
                False)
-
-################################################
-############# Handler class helper #############
-################################################
-
-def EmailAdmins(error_msg, defer_now=False):
-  """Sends email to admins with the preferred message, with option to defer.
-
-  Uses the template error_notify.templ to generate an email with the {error_msg}
-  sent to the list of admins in admins.ADMINS_TO.
-
-  Args:
-    error_msg: A string containing an error to be sent to admins by email
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
-  """
-  if defer_now:
-    defer(EmailAdmins, error_msg, defer_now=False, _url='/workers')
-    return
-
-  sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
-  subject = 'Persistent Cal Error: Admin Notify'
-  body = JINJA2_RENDERER.render_template('error_notify.templ', error=error_msg)
-  mail.send_mail(sender=sender, to=ADMINS_TO,
-                 subject=subject, body=body)
-
-
-def DeadlineDecorator(method):
-  """Decorator for HTTP verbs to handle GAE timeout.
-
-  Args:
-    method: a callable object, expected to be a method of an object from
-        a class that inherits from webapp.RequestHandler
-
-  Returns:
-    A new function which calls {method}, catches certain errors
-        and responds to them gracefully
-  """
-
-  def WrappedMethod(self, *args, **kwargs):  # pylint:disable-msg=W0142
-    """Returned function that uses method from outside scope.
-
-    Tries to execute the method with the arguments. If either a
-    PermanentTaskFailure is thrown (from deferred library) or if one of the two
-    DeadlineExceededError's is thrown (inherits directly from BaseException)
-    administrators are emailed and then cleanup occurs.
-    """
-    try:
-      method(self, *args, **kwargs)
-    except PermanentTaskFailure:
-      # In this case, the function can't be run, so we alert but do not
-      # raise the error, returning a 200 status code, hence killing the task.
-      msg = 'Permanent failure attempting to execute task.'
-      logging.exception(msg)
-      EmailAdmins(msg, defer_now=True)
-    except (runtime.DeadlineExceededError,
-            urlfetch_errors.DeadlineExceededError):
-      # pylint:disable-msg=W0142
-      traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
-      logging.exception(traceback_info)
-      EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
-
-      self.response.clear()
-      self.response.set_status(500)
-      self.response.out.write(RENDERED_500_PAGE)
-
-  return WrappedMethod
-
-
-class ExtendedHandler(webapp.RequestHandler):
-  """A custom version of GAE webapp.RequestHandler.
-
-  This subclass of webapp.RequestHandler defines a handle_exception
-  function that will email administrators when an exception
-  occurs. In addition, the __new__ method is overridden
-  to allow custom wrappers to be placed around the HTTP verbs
-  before an instance is created.
-  """
-
-  def __new__(cls, *args, **kwargs):  # pylint:disable-msg=W0142
-    """Constructs the object.
-
-    This is explicitly intended for Google App Engine's webapp.RequestHandler.
-    Requests only suport 7 of the 9 HTTP verbs, 4 of which we will
-    decorate: get, post, put and delete. The other three supported
-    (head, options, trace) may be added at a later time.
-    Args:
-      cls: A reference to the class
-
-    Reference: ('http://code.google.com/appengine/docs/python/tools/'
-                'webapp/requesthandlerclass.html')
-    """
-    verbs = ['get', 'post', 'put', 'delete']
-
-    for verb in verbs:
-      method = getattr(cls, verb, None)
-      if callable(method):
-        setattr(cls, verb, DeadlineDecorator(method))
-
-    return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
-
-  @webapp.cached_property
-  def Jinja2(self):
-    """Cached property holding a Jinja2 instance."""
-    return jinja2.get_jinja2(app=self.app)
-
-  def RenderResponse(self, template, **context):  # pylint:disable-msg=W0142
-    """Use Jinja2 instance to render template and write to output.
-
-    Args:
-      template: filename (relative to ~/templates) that we are rendering
-      context: keyword arguments corresponding to variables in template
-    """
-    rendered_value = self.Jinja2.render_template(template, **context)
-    self.response.write(rendered_value)
-
-  # pylint:disable-msg=C0103,W0613
-  def handle_exception(self, exception, debug_mode):
-    """Custom handler for all GAE errors that inherit from Exception.
-
-    Args:
-      exception: the exception that was thrown
-      debug_mode: True if the web application is running in debug mode
-    """
-    traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
-    logging.exception(traceback_info)
-    EmailAdmins(traceback_info, defer_now=True)
-
-    self.response.clear()
-    self.response.set_status(500)
-    self.response.out.write(RENDERED_500_PAGE)

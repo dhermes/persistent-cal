@@ -40,7 +40,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 import os
 
 # App specific libraries
-from library import InitCredentials
+from google_api_utils import InitCredentials
 from library import UpdateUserSubscriptions
 from models import UserCal
 

@@ -15,7 +15,10 @@
 # limitations under the License.
 
 
-"""Utility library for persistent-cal with no App Engine depencies."""
+"""Time utility library for persistent-cal with no App Engine depencies.
+
+Provides time related parsing and conversion functions.
+"""
 
 
 __author__ = 'dhermes@google.com (Daniel Hermes)'

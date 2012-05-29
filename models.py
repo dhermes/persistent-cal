@@ -24,9 +24,6 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 # General libraries
 import json
 
-# Third-party libraries
-from oauth2client.appengine import CredentialsProperty
-
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import db
@@ -34,11 +31,6 @@ from google.appengine.ext import db
 # App specific libraries
 from custom_exceptions import AttendeesNotUpdated
 import time_utils
-
-
-class Credentials(db.Model):  # pylint:disable-msg=R0904
-  """A Credentials class for storing calendar credentials."""
-  credentials = CredentialsProperty()
 
 
 class TimeKeyword(db.Model):  # pylint:disable-msg=R0904

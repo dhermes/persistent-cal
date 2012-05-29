@@ -25,8 +25,8 @@ import os
 # Third-party libraries
 
 # App specific libraries
+from google_api_utils import InitService
 from library import CALENDAR_ID
-from library import InitService
 from models import Event
 
 

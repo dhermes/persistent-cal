@@ -28,10 +28,10 @@ import datetime
 from google.appengine.ext import webapp
 
 # App specific libraries
-from library import CheckCalendarDiscoveryDoc
-from library import CheckFutureFeaturesDoc
-from library import ExtendedHandler
-from library import InitCredentials
+from google_api_utils import CheckCalendarDiscoveryDoc
+from google_api_utils import CheckFutureFeaturesDoc
+from google_api_utils import InitCredentials
+from handler_utils import ExtendedHandler
 from library import MonthlyCleanup
 from library import UpdateUserSubscriptions
 from models import UserCal
@@ -81,8 +81,8 @@ class CheckDiscoveryDoc(ExtendedHandler):
     if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
       return
 
-    CheckCalendarDiscoveryDoc()
-    CheckFutureFeaturesDoc()
+    CheckCalendarDiscoveryDoc(defer_now=True)
+    CheckFutureFeaturesDoc(defer_now=True)
 
 
 class CleanupHandler(ExtendedHandler):
