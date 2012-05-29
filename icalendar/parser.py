@@ -16,7 +16,8 @@ import re
 import textwrap
 from types import TupleType, ListType
 from icalendar.caselessdict import CaselessDict
-import pytz
+# import pytz  Replaced for loading purposes on GAE
+from pytz.gae import pytz
 SequenceTypes = [TupleType, ListType]
 
 

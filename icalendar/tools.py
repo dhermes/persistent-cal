@@ -5,7 +5,8 @@ eh?
 import random
 from string import ascii_letters, digits
 from datetime import datetime
-import pytz
+# import pytz  Replaced for loading purposes on GAE
+from pytz.gae import pytz
 
 def utctz():
     """ Return an UTC tzinfo object from the pytz library.
