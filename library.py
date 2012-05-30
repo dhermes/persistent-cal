@@ -38,7 +38,6 @@ from google.appengine import runtime
 
 # App specific libraries
 from custom_exceptions import BadInterval
-from google_api_utils import AttemptAPIAction
 from handler_utils import EmailAdmins
 from models import Event
 import time_utils
@@ -224,22 +223,9 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
           # If federated identity not set, User.__cmp__ only uses email
           event.attendees.remove(user_cal.owner)
           if not event.attendees:
-            # pylint:disable-msg=E1101
-            log_msg = '{} deleted'.format(event.gcal_edit)
-            # pylint:disable-msg=E1101
-            AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
-                             calendarId=CALENDAR_ID, eventId=event.gcal_edit)
-
-            event.delete()  # pylint:disable-msg=E1103
+            event.delete(credentials=credentials)
           else:
-            # pylint:disable-msg=E1101
-            updated_event = AttemptAPIAction('update', credentials=credentials,
-                                             calendarId=CALENDAR_ID,
-                                             eventId=event.gcal_edit,
-                                             body=event.as_dict())
-            sequence = updated_event.get('sequence', event.sequence)
-            event.sequence = sequence
-            event.put()
+            event.update(credentials=credentials)
 
     user_cal.upcoming = upcoming
     user_cal.put()

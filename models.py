@@ -240,13 +240,13 @@ class Event(db.Model):  # pylint:disable-msg=R0904
     event_data = self.as_dict()
     event_data.pop('id')
 
-    cal_event = AttemptAPIAction('insert', credentials=credentials,
-                                 calendarId=CALENDAR_ID, body=event_data)
-    if cal_event is None:
+    inserted_event = AttemptAPIAction('insert', credentials=credentials,
+                                      calendarId=CALENDAR_ID, body=event_data)
+    if inserted_event is None:
       return False  # failed
 
-    self.gcal_edit = cal_event['id']
-    self.sequence = cal_event.get('sequence', 0)
+    self.gcal_edit = inserted_event['id']
+    self.sequence = inserted_event.get('sequence', 0)
     self.put()
 
     return True
@@ -284,6 +284,25 @@ class Event(db.Model):  # pylint:disable-msg=R0904
     self.put()
 
     return True
+
+  def delete(self, credentials=None):  # pylint:disable-msg=C0103,W0221
+    """Will delete the event in GCal and then delete from the datastore.
+
+    Args:
+      credentials: An OAuth2Credentials object used to build a service object.
+          In the case the credentials is the default value of None, future
+          methods will attempt to get credentials from the default credentials.
+
+    Raises:
+      InappropriateAPIAction in the case that there is no GCal event to delete
+    """
+    if self.gcal_edit is None:
+      raise InappropriateAPIAction('Update attempted when id not set.')
+
+    log_msg = '{} deleted'.format(self.gcal_edit)
+    AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
+                     calendarId=CALENDAR_ID, eventId=self.gcal_edit)
+    super(Event, self).delete()
 
   @classmethod
   # pylint:disable-msg=C0103
