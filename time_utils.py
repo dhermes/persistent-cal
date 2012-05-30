@@ -125,36 +125,3 @@ def StringToDayString(time_as_str):
     if isinstance(datetime_obj, datetime.datetime):
       datetime_obj = datetime_obj.date()
     return datetime_obj.strftime('%Y-%m-%d')
-
-
-def RemoveTimezone(time_value):
-  """Takes a datetime object and removes the timezone.
-
-  NOTE: This is done to allow comparison of all acceptable timestamps.
-  In the case that time_value is not an expected type, we simply
-  return the original time_value and let the caller deal with the
-  unexpected return type.
-
-  Args:
-    time_value: a datetime.datetime or datetime.date object
-
-  Returns:
-    If time_value is a datetime.datetime object, a new datetime.datetime
-        object is returned with the same values but with time zone stripped,
-        else if time_value is a datetime.date object a datetime.datetime
-        object at 12am on the same date as time_value is returned (again
-        with no time zone), else the original value of time_value is
-        returned.
-  """
-  if isinstance(time_value, datetime.datetime):
-    if time_value.tzinfo is not None:
-      time_parse = '%Y-%m-%dT%H:%M:%S.000Z'
-      time_value = time_value.strftime(time_parse)  # TZ is lost
-      time_value = datetime.datetime.strptime(time_value, time_parse)
-  elif isinstance(time_value, datetime.date):
-    # convert to datetime.datetime object for comparison
-    time_value = datetime.datetime(year=time_value.year,
-                                   month=time_value.month,
-                                   day=time_value.day)
-
-  return time_value

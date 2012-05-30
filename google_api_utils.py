@@ -24,10 +24,12 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 # General libraries
 import json
 import logging
+import time
 
 # Third-party libraries
 from apiclient.discovery import DISCOVERY_URI
 from apiclient.discovery import build_from_document
+from apiclient.errors import HttpError
 import httplib2
 from oauth2client.appengine import CredentialsProperty
 from oauth2client.appengine import StorageByKeyName
@@ -198,3 +200,44 @@ def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION, defer_now=False):
   if resp.status != 404:
     EmailAdmins('Future features JSON responded with {}.'.format(resp.status),
                 defer_now=True)
+
+
+def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
+                     credentials=None, **kwargs):
+  """Attempt an API action a predetermined number of times before failing.
+
+  Args:
+    http_verb: The HTTP verb of the intended request. Examle: get, update.
+    num_attempts: The number of attempts to make before failing the request.
+        Defaults to 3.
+    log_msg: The log message to report upon success. Defaults to None.
+    credentials: An OAuth2Credentials object used to build a service object.
+    kwargs: The keyword arguments to be passed to the API request.
+
+  Returns:
+    The result of the API request
+  """
+  service = InitService(credentials=credentials)
+
+  # pylint:disable-msg=E1101
+  api_action = getattr(service.events(), http_verb, None)
+  if api_action is None:
+    return None
+
+  attempts = int(num_attempts) if int(num_attempts) > 0 else 0
+  while attempts:
+    try:
+      result = api_action(**kwargs).execute()
+
+      if log_msg is None:
+        log_msg = '{id_} changed via {verb}'.format(id_=result['id'],
+                                                    verb=http_verb)
+      logging.info(log_msg)
+
+      return result
+    except (httplib2.HttpLib2Error, HttpError) as exc:
+      logging.info(exc)
+      attempts -= 1
+      time.sleep(3)
+
+  return None

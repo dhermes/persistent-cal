@@ -26,28 +26,21 @@ import datetime
 import json
 import logging
 import re
-from time import sleep
 
 # Third-party libraries
-from apiclient.errors import HttpError
-import httplib2
 from icalendar import Calendar
 
 # App engine specific libraries
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_errors
-from google.appengine.ext import db
 from google.appengine.ext.deferred import defer
 from google.appengine import runtime
 
 # App specific libraries
 from custom_exceptions import BadInterval
-from custom_exceptions import MissingUID
-from custom_exceptions import UnexpectedDescription
-from google_api_utils import InitService
+from google_api_utils import AttemptAPIAction
 from handler_utils import EmailAdmins
 from models import Event
-from models import TimeKeyword
 import time_utils
 
 
@@ -83,47 +76,6 @@ def UpdateString(update_intervals):
     return json.dumps(RESPONSES[length])
 
 
-def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
-                     credentials=None, **kwargs):
-  """Attempt an API action a predetermined number of times before failing.
-
-  Args:
-    http_verb: The HTTP verb of the intended request. Examle: get, update.
-    num_attempts: The number of attempts to make before failing the request.
-        Defaults to 3.
-    log_msg: The log message to report upon success. Defaults to None.
-    credentials: An OAuth2Credentials object used to build a service object.
-    kwargs: The keyword arguments to be passed to the API request.
-
-  Returns:
-    The result of the API request
-  """
-  service = InitService(credentials=credentials)
-
-  # pylint:disable-msg=E1101
-  api_action = getattr(service.events(), http_verb, None)
-  if api_action is None:
-    return None
-
-  attempts = int(num_attempts) if num_attempts > 0 else 0
-  while attempts:
-    try:
-      result = api_action(**kwargs).execute()
-
-      if log_msg is None:
-        log_msg = '{id_} changed via {verb}'.format(id_=result['id'],
-                                                    verb=http_verb)
-      logging.info(log_msg)
-
-      return result
-    except (httplib2.HttpLib2Error, HttpError) as exc:
-      logging.info(exc)
-      attempts -= 1
-      sleep(3)
-
-  return None
-
-
 def WhiteList(link):
   """Determines if a link is on the whitelist and transforms it if needed.
 
@@ -136,7 +88,7 @@ def WhiteList(link):
         (possibly different) equivalent value of link which is used
         internally.
   """
-  # If WhiteList is updated, ParseEvent must be as well
+  # If WhiteList is updated, event parsing must be as well
   valid = False
   transformed = link
 
@@ -150,77 +102,6 @@ def WhiteList(link):
     transformed = 'http://{}'.format(link[len(protocol):])
 
   return valid, transformed
-
-
-def ParseEvent(event):
-  """Parses an iCalendar.cal.Event instance to a predefined format.
-
-  In the whitelisted feeds, all events have a UID. Almost all events begin
-  with 'item-'. Those that don't begin with 'item-' are a placeholder event
-  event for the entire length of the trip. In this case, we expect the
-  description to resemble the phrase '{name} is in {location}'. This holds
-  except in the case that the location is 'No destination specified', in
-  which case description resembles '{name} is in an unspecified location'. Since
-  events may be attended by multiple users, we replace '{name} is in' with
-  the phrase 'In'.
-
-  Args:
-    event: an icalendar.cal.Event object parsed from a .ics feed.
-
-  Returns:
-    A tuple (uid, event_data) where uid is an attribute from the event
-        and event_data is a dictionary containing the start and end times
-        of the event, and the summary, location and description of the event.
-
-  Raises:
-    UnexpectedDescription in the case that the description does not contain the
-        phrase we expect it to.
-  """
-  uid = event.get('uid', None)
-  if uid is None:
-    raise MissingUID(event)
-
-  # convert from type icalendar.prop.vText to unicode
-  uid = unicode(uid)
-  description = unicode(event.get('description', ''))
-  location = unicode(event.get('location', ''))
-
-  # The phrase 'No destination specified' does not match its
-  # counterpart in the description, so we transform {location}.
-  if location == 'No destination specified':
-    location = 'an unspecified location'
-
-  # Check description is formed as we expect
-  if not uid.startswith('item-'):
-    target = ' is in {} '.format(location)
-    if description.count(target) != 1:
-      raise UnexpectedDescription(description)
-
-    # remove name from the description
-    description = 'In {location} {description}'.format(
-        location=location, description=description.split(target)[1])
-
-  start_string = time_utils.FormatTime(event.get('dtstart').dt)
-  start_keyword = 'dateTime' if start_string.endswith('Z') else 'date'
-  start = {start_keyword: start_string}
-
-  end_string = time_utils.FormatTime(event.get('dtend').dt)
-  end_keyword = 'dateTime' if end_string.endswith('Z') else 'date'
-  end = {end_keyword: end_string}
-
-  summary = unicode(event.get('summary'))
-  if not summary:
-    summary = 'None'
-
-  sequence = event.get('sequence', None)
-
-  event_data = {'start': start,
-                'end': end,
-                'summary': summary,
-                'location': location,
-                'description': description,
-                'sequence': sequence}
-  return uid, event_data
 
 
 def DeferFunctionDecorator(method):
@@ -499,72 +380,12 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
       if component.name != 'VCALENDAR':
         EmailAdmins(msg, defer_now=True)
     else:
-      uid, event_data = ParseEvent(component)
-      event = Event.get_by_key_name(uid)
-      if event is None:
-        event_data['attendees'] = [{'email': current_user.email()}]
-        cal_event = AttemptAPIAction('insert', credentials=credentials,
-                                     calendarId=CALENDAR_ID, body=event_data)
+      event, failed = Event.from_ical_event(component, current_user,
+                                            credentials=credentials)
 
-        if cal_event is None:
-          yield (uid, False, True)
-          continue
-
-        gcal_edit = cal_event['id']
-        sequence = cal_event.get('sequence', 0)
-        event = Event(key_name=uid,
-                      description=db.Text(event_data['description']),
-                      start=TimeKeyword.from_dict(event_data['start']),
-                      end=TimeKeyword.from_dict(event_data['end']),
-                      location=event_data['location'],
-                      summary=event_data['summary'],
-                      attendees=[current_user],
-                      gcal_edit=gcal_edit,
-                      sequence=sequence)
-        event.put()
-
-        # execution has successfully completed
-        yield (uid,
-               time_utils.RemoveTimezone(component.get('dtend').dt) > now,
-               False)
+      uid = event.key().name()
+      if failed:
+        yield (uid, False, True)
       else:
-        # Spoof existing datapoints from the Event object
-        event_data['id'] = event.gcal_edit
-        event_data['attendees'] = event.attendee_emails()
-        if event_data['sequence'] is None:
-          event_data['sequence'] = event.sequence  # pylint:disable-msg=E1103
-
-        # We need to make changes for new event data or a new owner
-        if (current_user not in event.attendees or
-            event_data != event.as_dict()):
-          # Update attendees
-          if current_user not in event.attendees:  # pylint:disable-msg=E1103
-            event.attendees.append(current_user)  # pylint:disable-msg=E1103
-          # pylint:disable-msg=E1103
-          event_data['attendees'] = event.attendee_emails()
-
-          # Push all updates to calendar event
-          # pylint:disable-msg=E1103
-          log_msg = '{} updated'.format(event.gcal_edit)
-          updated_event = AttemptAPIAction('update', log_msg=log_msg,
-                                           credentials=credentials,
-                                           calendarId=CALENDAR_ID,
-                                           eventId=event.gcal_edit,
-                                           body=event_data)
-
-          # If updated_event is None, we have failed and
-          # don't want to add the uid to results
-          if updated_event is None:
-            yield (uid, False, True)
-            continue
-          else:
-            sequence = updated_event.get('sequence', None)
-            if sequence is not None:
-              event_data['sequence'] = sequence
-            event.update_from_dict(event_data)
-            event.put()  # pylint:disable-msg=E1103
-
-        # execution has successfully completed
-        yield (uid,
-               time_utils.RemoveTimezone(component.get('dtend').dt) > now,
-               False)
+        is_upcoming = event.end.to_datetime() > now
+        yield (uid, is_upcoming, False)

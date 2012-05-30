@@ -31,7 +31,7 @@ from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
 
 # App specific libraries
-from models import Credentials
+from google_api_utils import Credentials
 import secret_key
 
 

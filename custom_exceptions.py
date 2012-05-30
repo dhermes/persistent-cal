@@ -33,6 +33,10 @@ class BadInterval(Error):
   """Error corresponding to an unanticipated number of update intervals."""
 
 
+class InappropriateAPIAction(Error):
+  """Error corresponding to an insert that should not be occurring."""
+
+
 class CredentialsLoadError(Error):
   """Error when credentials are not loaded correctly from a specified file."""
 
