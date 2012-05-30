@@ -24,13 +24,13 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 # General libraries
 import datetime
 import json
+import logging
 
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import db
 
 # App specific libraries
-from custom_exceptions import AttendeesNotUpdated
 from custom_exceptions import InappropriateAPIAction
 from custom_exceptions import MissingUID
 from custom_exceptions import UnexpectedDescription
@@ -92,7 +92,7 @@ class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
     return datetime.datetime.strptime(self.value, time_parse)
 
   def __eq__(self, other):
-    """Custom comparison function using only the attributes.
+    """Custom equality function using only the attributes.
 
     Args:
       other: The other value to be compared against
@@ -100,6 +100,14 @@ class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
     if not isinstance(other, TimeKeyword):
       return False
     return self.keyword == other.keyword and self.value == other.value
+
+  def __ne__(self, other):
+    """Custom negation of equality function using only the attributes.
+
+    Args:
+      other: The other value to be compared against
+    """
+    return not self.__eq__(other)
 
   def __repr__(self):
     return 'TimeKeyword({!r})'.format(self.as_dict())
@@ -322,10 +330,12 @@ class Event(db.Model):  # pylint:disable-msg=R0904
       for attr, value in event_data.iteritems():
         if getattr(event, attr) != value:
           setattr(event, attr, value)
+          logging.info('{attr} changed for {uid}'.format(attr=attr, uid=uid))
           changed = True
 
       if current_user not in event.attendees:  # pylint:disable-msg=E1103
         event.attendees.append(current_user)  # pylint:disable-msg=E1103
+        logging.info('attendees changed for {uid}'.format(uid=uid))
         changed = True
 
       success = True

@@ -25,10 +25,6 @@ class Error(Exception):
   """Base error class for library functions."""
 
 
-class AttendeesNotUpdated(Error):
-  """Error corresponding to an unexpected value of models.Event.attendees."""
-
-
 class BadInterval(Error):
   """Error corresponding to an unanticipated number of update intervals."""
 
