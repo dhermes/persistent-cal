@@ -285,23 +285,34 @@ class Event(db.Model):  # pylint:disable-msg=R0904
 
     return True
 
-  def delete(self, credentials=None):  # pylint:disable-msg=C0103,W0221
+  # pylint:disable-msg=C0103,W0221
+  def delete(self, skip_gcal=False, credentials=None):
     """Will delete the event in GCal and then delete from the datastore.
+
+    If skip_gcal is True, it will only delete from the datastore.
 
     Args:
       credentials: An OAuth2Credentials object used to build a service object.
           In the case the credentials is the default value of None, future
           methods will attempt to get credentials from the default credentials.
+      skip_gcal: Boolean. If set to True, the event will not be deleted from
+          the GCal instance. False by default.
 
     Raises:
       InappropriateAPIAction in the case that there is no GCal event to delete
     """
-    if self.gcal_edit is None:
-      raise InappropriateAPIAction('Update attempted when id not set.')
+    if not skip_gcal:
+      if self.gcal_edit is None:
+        raise InappropriateAPIAction('Update attempted when id not set.')
 
-    log_msg = '{} deleted'.format(self.gcal_edit)
-    AttemptAPIAction('delete', log_msg=log_msg, credentials=credentials,
-                     calendarId=CALENDAR_ID, eventId=self.gcal_edit)
+      log_msg = '{} deleted'.format(self.gcal_edit)
+      delete_response = AttemptAPIAction('delete', log_msg=log_msg,
+                                         credentials=credentials,
+                                         calendarId=CALENDAR_ID,
+                                         eventId=self.gcal_edit)
+      if delete_response is None:
+        return
+
     super(Event, self).delete()
 
   @classmethod
@@ -371,7 +382,9 @@ class Event(db.Model):  # pylint:disable-msg=R0904
   @db.ComputedProperty
   def end_date(self):  # pylint:disable-msg=C0103
     """Derived property that turns end into a date string."""
-    return time_utils.StringToDayString(self.end.value)
+    end_datetime = self.end.to_datetime()
+    end_date = end_datetime.date()
+    return end_date.strftime('%Y-%m-%d')
 
   def attendee_emails(self):  # pylint:disable-msg=C0103
     """Returns a list of dictionaries corresponding to attendee emails."""

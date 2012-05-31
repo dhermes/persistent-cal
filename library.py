@@ -186,7 +186,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
   for event in old_events:
     logging.info('{event} removed from datastore. {event.gcal_edit} '
                  'remains in calendar.'.format(event=event))
-    event.delete()
+    event.delete(skip_gcal=True)
 
 
 def UpdateUpcoming(user_cal, upcoming, credentials=None):
@@ -216,16 +216,13 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
     for uid in user_cal.upcoming:
       if uid not in upcoming:
         event = Event.get_by_key_name(uid)
-
-        # pylint:disable-msg=E1103
-        end_date = time_utils.TimeToDTStamp(event.end.value)
-        if end_date > now:
+        if event.end.to_datetime() > now:  # pylint:disable-msg=E1103
           # If federated identity not set, User.__cmp__ only uses email
-          event.attendees.remove(user_cal.owner)
-          if not event.attendees:
-            event.delete(credentials=credentials)
+          event.attendees.remove(user_cal.owner)  # pylint:disable-msg=E1103
+          if not event.attendees:  # pylint:disable-msg=E1103
+            event.delete(credentials=credentials)  # pylint:disable-msg=E1103
           else:
-            event.update(credentials=credentials)
+            event.update(credentials=credentials)  # pylint:disable-msg=E1103
 
     user_cal.upcoming = upcoming
     user_cal.put()
