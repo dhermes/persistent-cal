@@ -344,8 +344,11 @@ class Event(db.Model):  # pylint:disable-msg=R0904
     uid = unicode(uid)
 
     event_data = {}
+    summary = ical_event.get('summary', None)
+    if not summary:
+      summary = '(No Title)'
     # convert from type icalendar.prop.vText to unicode
-    event_data['summary'] = unicode(ical_event.get('summary', '(No Title)'))
+    event_data['summary'] = unicode(summary)
 
     description, location = ConvertedDescription(ical_event)
     event_data['description'] = description
