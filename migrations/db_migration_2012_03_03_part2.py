@@ -70,5 +70,5 @@ def UpdateEvents():
       service.events().get(calendarId=cal_id, eventId=event_id).execute()
       event.put()
     except HttpError as e:
-      print '%s failed with: %s %s' % (event_id, type(e), e)
+      print('%s failed with: %s %s' % (event_id, type(e), e))
 

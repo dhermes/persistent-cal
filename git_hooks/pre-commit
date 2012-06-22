@@ -42,7 +42,7 @@ if ('nothing to commit' in git_status or
   msg = '# From pre-commit hook: No commit necessary, ' \
         'sensitive config unchanged. #'
   hash_head = '#' * len(msg)
-  print ('%s\n%s\n%s\n\n' % (hash_head, msg, hash_head)),
+  print('%s\n%s\n%s\n' % (hash_head, msg, hash_head))
 
   for fi in protected_files:
     switch_contents(fi)

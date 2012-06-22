@@ -276,7 +276,7 @@ def PrintMessageList(msg_list):
   header = '+%s+' % ('-' * (length + 2))
   result = [header] + result + [header]
 
-  print '\n'.join(result)
+  print('\n'.join(result))
 
 
 def AddSubscription(application_auth, payload, add_endpoint=ADD_ENDPOINT):
@@ -575,7 +575,7 @@ def main():
   except (AuthException, APIUseException) as exc:
     PrintMessageList(exc.message)
   except KeyboardInterrupt:
-    print '\n\n',
+    print('\n')
     PrintMessageList(['Sorry I couldn\'t be more helpful.',
                       'That hurts when you cancel me!'])
 

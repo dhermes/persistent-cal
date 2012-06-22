@@ -59,4 +59,4 @@ def ForceUpdate(now_intervals):
                                legitimate_intervals)
   for user_cal in matching_users:
     UpdateUserSubscriptions(user_cal, credentials=CREDENTIALS, defer_now=True)
-    print user_cal
+    print(user_cal)
