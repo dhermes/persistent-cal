@@ -1,6 +1,9 @@
 This will allow a persistent import of one Google Calendar into another,
 according to user set intervals
 
+To update client libraries:
+http://code.google.com/p/google-api-python-client/wiki/GoogleAppEngine
+
 PyLint-ing via:
 APPENGINE_PATH="/Applications/GoogleAppEngineLauncher.app/Contents/Resources/GoogleAppEngine-default.bundle/Contents/Resources/google_appengine";
 WEBAPP2_PATH="$APPENGINE_PATH/lib/webapp2";

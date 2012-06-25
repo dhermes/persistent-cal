@@ -159,7 +159,8 @@ class Credentials(object):
     t = type(self)
     d = copy.copy(self.__dict__)
     for member in strip:
-      del d[member]
+      if member in d:
+        del d[member]
     if 'token_expiry' in d and isinstance(d['token_expiry'], datetime.datetime):
       d['token_expiry'] = d['token_expiry'].strftime(EXPIRY_FORMAT)
     # Add in information we will need later to reconsistitue this instance.
@@ -203,6 +204,20 @@ class Credentials(object):
     from_json = getattr(kls, 'from_json')
     return from_json(s)
 
+  @classmethod
+  def from_json(cls, s):
+    """Instantiate a Credentials object from a JSON description of it.
+
+    The JSON should have been produced by calling .to_json() on the object.
+
+    Args:
+      data: dict, A deserialized JSON object.
+
+    Returns:
+      An instance of a Credentials subclass.
+    """
+    return Credentials()
+
 
 class Flow(object):
   """Base class for all Flow objects."""
@@ -220,7 +235,8 @@ class Storage(object):
   def acquire_lock(self):
     """Acquires any lock necessary to access this Storage.
 
-    This lock is not reentrant."""
+    This lock is not reentrant.
+    """
     pass
 
   def release_lock(self):
@@ -577,7 +593,7 @@ class OAuth2Credentials(Credentials):
     body = self._generate_refresh_request_body()
     headers = self._generate_refresh_request_headers()
 
-    logger.info('Refresing access_token')
+    logger.info('Refreshing access_token')
     resp, content = http_request(
         self.token_uri, method='POST', body=body, headers=headers)
     if resp.status == 200:
@@ -595,7 +611,7 @@ class OAuth2Credentials(Credentials):
     else:
       # An {'error':...} response body means the token is expired or revoked,
       # so we flag the credentials as such.
-      logger.error('Failed to retrieve access token: %s' % content)
+      logger.info('Failed to retrieve access token: %s' % content)
       error_msg = 'Invalid response %s.' % resp['status']
       try:
         d = simplejson.loads(content)
@@ -799,7 +815,7 @@ if HAS_OPENSSL:
           'iss': self.service_account_name
       }
       payload.update(self.kwargs)
-      logging.debug(str(payload))
+      logger.debug(str(payload))
 
       return make_signed_jwt(
           Signer.from_string(self.private_key, self.private_key_password),
@@ -864,6 +880,78 @@ def _extract_id_token(id_token):
       'Wrong number of segments in token: %s' % id_token)
 
   return simplejson.loads(_urlsafe_b64decode(segments[1]))
+
+def credentials_from_code(client_id, client_secret, scope, code,
+                        redirect_uri = 'postmessage',
+                        http=None, user_agent=None,
+                        token_uri='https://accounts.google.com/o/oauth2/token'):
+  """Exchanges an authorization code for an OAuth2Credentials object.
+
+  Args:
+    client_id: string, client identifier.
+    client_secret: string, client secret.
+    scope: string or list of strings, scope(s) to request.
+    code: string, An authroization code, most likely passed down from
+      the client
+    redirect_uri: string, this is generally set to 'postmessage' to match the
+      redirect_uri that the client specified
+    http: httplib2.Http, optional http instance to use to do the fetch
+    token_uri: string, URI for token endpoint. For convenience
+      defaults to Google's endpoints but any OAuth 2.0 provider can be used.
+  Returns:
+    An OAuth2Credentials object.
+
+  Raises:
+    FlowExchangeError if the authorization code cannot be exchanged for an
+     access token
+  """
+  flow = OAuth2WebServerFlow(client_id, client_secret, scope, user_agent,
+                             'https://accounts.google.com/o/oauth2/auth',
+                             token_uri)
+
+  # We primarily make this call to set up the redirect_uri in the flow object
+  uriThatWeDontReallyUse = flow.step1_get_authorize_url(redirect_uri)
+  credentials = flow.step2_exchange(code, http)
+  return credentials
+
+
+def credentials_from_clientsecrets_and_code(filename, scope, code,
+                                            message = None,
+                                            redirect_uri = 'postmessage',
+                                            http=None):
+  """Returns OAuth2Credentials from a clientsecrets file and an auth code.
+
+  Will create the right kind of Flow based on the contents of the clientsecrets
+  file or will raise InvalidClientSecretsError for unknown types of Flows.
+
+  Args:
+    filename: string, File name of clientsecrets.
+    scope: string or list of strings, scope(s) to request.
+    code: string, An authroization code, most likely passed down from
+      the client
+    message: string, A friendly string to display to the user if the
+      clientsecrets file is missing or invalid. If message is provided then
+      sys.exit will be called in the case of an error. If message in not
+      provided then clientsecrets.InvalidClientSecretsError will be raised.
+    redirect_uri: string, this is generally set to 'postmessage' to match the
+      redirect_uri that the client specified
+    http: httplib2.Http, optional http instance to use to do the fetch
+
+  Returns:
+    An OAuth2Credentials object.
+
+  Raises:
+    FlowExchangeError if the authorization code cannot be exchanged for an
+     access token
+    UnknownClientSecretsFlowError if the file describes an unknown kind of Flow.
+    clientsecrets.InvalidClientSecretsError if the clientsecrets file is
+      invalid.
+  """
+  flow = flow_from_clientsecrets(filename, scope, message)
+  # We primarily make this call to set up the redirect_uri in the flow object
+  uriThatWeDontReallyUse = flow.step1_get_authorize_url(redirect_uri)
+  credentials = flow.step2_exchange(code, http)
+  return credentials
 
 
 class OAuth2WebServerFlow(Flow):
@@ -940,10 +1028,24 @@ class OAuth2WebServerFlow(Flow):
         of the query parameters to the redirect_uri, which contains
         the code.
       http: httplib2.Http, optional http instance to use to do the fetch
+
+    Returns:
+      An OAuth2Credentials object that can be used to authorize requests.
+
+    Raises:
+      FlowExchangeError if a problem occured exchanging the code for a
+      refresh_token.
     """
 
     if not (isinstance(code, str) or isinstance(code, unicode)):
-      code = code['code']
+      if 'code' not in code:
+        if 'error' in code:
+          error_msg = code['error']
+        else:
+          error_msg = 'No code was supplied in the query parameters.'
+        raise FlowExchangeError(error_msg)
+      else:
+        code = code['code']
 
     body = urllib.urlencode({
         'grant_type': 'authorization_code',
@@ -984,7 +1086,7 @@ class OAuth2WebServerFlow(Flow):
                                self.token_uri, self.user_agent,
                                id_token=d.get('id_token', None))
     else:
-      logger.error('Failed to retrieve access token: %s' % content)
+      logger.info('Failed to retrieve access token: %s' % content)
       error_msg = 'Invalid response %s.' % resp['status']
       try:
         d = simplejson.loads(content)

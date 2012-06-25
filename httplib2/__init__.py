@@ -111,6 +111,8 @@ __all__ = ['Http', 'Response', 'ProxyInfo', 'HttpLib2Error',
 # The httplib debug level, set to a non-zero value to get debug output
 debuglevel = 0
 
+# A request will be tried 'RETRIES' times if it fails at the socket/connection level.
+RETRIES = 2
 
 # Python 2.3 support
 if sys.version_info < (2,4):
@@ -860,13 +862,24 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
             raise ProxiesUnavailableError(
                 'Proxy support missing but proxy use was requested!')
         msg = "getaddrinfo returns an empty list"
-        for res in socket.getaddrinfo(self.host, self.port, 0,
-                socket.SOCK_STREAM):
+        if self.proxy_info and self.proxy_info.isgood():
+            use_proxy = True
+            proxy_type, proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass = self.proxy_info.astuple()
+        else:
+            use_proxy = False
+        if use_proxy and proxy_rdns:
+            host = proxy_host
+            port = proxy_port
+        else:
+            host = self.host
+            port = self.port
+
+        for res in socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM):
             af, socktype, proto, canonname, sa = res
             try:
-                if self.proxy_info and self.proxy_info.isgood():
+                if use_proxy:
                     self.sock = socks.socksocket(af, socktype, proto)
-                    self.sock.setproxy(*self.proxy_info.astuple())
+                    self.sock.setproxy(proxy_type, proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass)
                 else:
                     self.sock = socket.socket(af, socktype, proto)
                     self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -875,12 +888,16 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
                     self.sock.settimeout(self.timeout)
                     # End of difference from httplib.
                 if self.debuglevel > 0:
-                    print "connect: (%s, %s)" % (self.host, self.port)
+                    print "connect: (%s, %s) ************" % (self.host, self.port)
+                    if use_proxy:
+                        print "proxy: %s ************" % str((proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass))
 
                 self.sock.connect((self.host, self.port) + sa[2:])
             except socket.error, msg:
                 if self.debuglevel > 0:
-                    print 'connect fail:', (self.host, self.port)
+                    print "connect fail: (%s, %s)" % (self.host, self.port)
+                    if use_proxy:
+                        print "proxy: %s" % str((proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass))
                 if self.sock:
                     self.sock.close()
                 self.sock = None
@@ -966,12 +983,25 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
         "Connect to a host on a given (SSL) port."
 
         msg = "getaddrinfo returns an empty list"
+        if self.proxy_info and self.proxy_info.isgood():
+            use_proxy = True
+            proxy_type, proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass = self.proxy_info.astuple()
+        else:
+            use_proxy = False
+        if use_proxy and proxy_rdns:
+            host = proxy_host
+            port = proxy_port
+        else:
+            host = self.host
+            port = self.port
+        
         for family, socktype, proto, canonname, sockaddr in socket.getaddrinfo(
-            self.host, self.port, 0, socket.SOCK_STREAM):
+            host, port, 0, socket.SOCK_STREAM):
             try:
-                if self.proxy_info and self.proxy_info.isgood():
+                if use_proxy:
                     sock = socks.socksocket(family, socktype, proto)
-                    sock.setproxy(*self.proxy_info.astuple())
+                    
+                    sock.setproxy(proxy_type, proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass)
                 else:
                     sock = socket.socket(family, socktype, proto)
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -984,6 +1014,8 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
                     self.disable_ssl_certificate_validation, self.ca_certs)
                 if self.debuglevel > 0:
                     print "connect: (%s, %s)" % (self.host, self.port)
+                    if use_proxy:
+                        print "proxy: %s" % str((proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass))
                 if not self.disable_ssl_certificate_validation:
                     cert = self.sock.getpeercert()
                     hostname = self.host.split(':', 0)[0]
@@ -1009,7 +1041,9 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
               raise
             except socket.error, msg:
               if self.debuglevel > 0:
-                  print 'connect fail:', (self.host, self.port)
+                  print "connect fail: (%s, %s)" % (self.host, self.port)
+                  if use_proxy:
+                      print "proxy: %s" % str((proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass))
               if self.sock:
                   self.sock.close()
               self.sock = None
@@ -1133,8 +1167,7 @@ and more.
     def __init__(self, cache=None, timeout=None,
                  proxy_info=ProxyInfo.from_environment,
                  ca_certs=None, disable_ssl_certificate_validation=False):
-        """
-        If 'cache' is a string then it is used as a directory name for
+        """If 'cache' is a string then it is used as a directory name for
         a disk cache. Otherwise it must be an object that supports the
         same interface as FileCache.
 
@@ -1224,7 +1257,7 @@ and more.
         self.authorizations = []
 
     def _conn_request(self, conn, request_uri, method, body, headers):
-        for i in range(2):
+        for i in range(RETRIES):
             try:
                 if conn.sock is None:
                   conn.connect()
@@ -1249,21 +1282,21 @@ and more.
                 # Just because the server closed the connection doesn't apparently mean
                 # that the server didn't send a response.
                 if conn.sock is None:
-                    if i == 0:
+                    if i < RETRIES-1:
                         conn.close()
                         conn.connect()
                         continue
                     else:
                         conn.close()
                         raise
-                if i == 0:
+                if i < RETRIES-1:
                     conn.close()
                     conn.connect()
                     continue
             try:
                 response = conn.getresponse()
             except (socket.error, httplib.HTTPException):
-                if i == 0:
+                if i < RETRIES-1:
                     conn.close()
                     conn.connect()
                     continue
