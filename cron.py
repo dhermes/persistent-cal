@@ -29,7 +29,6 @@ from google.appengine.ext import webapp
 
 # App specific libraries
 from google_api_utils import CheckCalendarDiscoveryDoc
-from google_api_utils import CheckFutureFeaturesDoc
 from google_api_utils import InitCredentials
 from handler_utils import ExtendedHandler
 from library import MonthlyCleanup
@@ -82,7 +81,6 @@ class CheckDiscoveryDoc(ExtendedHandler):
       return
 
     CheckCalendarDiscoveryDoc(defer_now=True)
-    CheckFutureFeaturesDoc(defer_now=True)
 
 
 class CleanupHandler(ExtendedHandler):

@@ -48,8 +48,6 @@ import secret_key
 CREDENTIALS_KEYNAME = 'calendar.dat'
 DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
-FUTURE_LOCATION = ('http://code.google.com/p/google-api-python-client/source/'
-                   'browse/apiclient/contrib/calendar/future.json')
 
 
 class Credentials(db.Model):  # pylint:disable-msg=R0904
@@ -173,32 +171,6 @@ def CheckCalendarDiscoveryDoc(credentials=None, defer_now=False):
 
   if cached_discovery_doc != current_discovery_doc:
     EmailAdmins('Current discovery doc disagrees with cached version.',
-                defer_now=True)
-
-
-def CheckFutureFeaturesDoc(future_location=FUTURE_LOCATION, defer_now=False):
-  """Checks if a future features doc for the calendar service exists.
-
-  If a future features doc is detected, an email is sent to the administrators.
-
-  Args:
-    future_location: A string URL where the future features doc would reside if
-        it existed. This defaults to the constant FUTURE_LOCATION.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
-  """
-  logging.info('CheckFutureFeaturesDoc called with: {!r}'.format(locals()))
-
-  if defer_now:
-    defer(CheckFutureFeaturesDoc, future_location=future_location,
-          defer_now=False, _url='/workers')
-    return
-
-  http = httplib2.Http()
-  resp, _ = http.request(future_location)
-
-  if resp.status != 404:
-    EmailAdmins('Future features JSON responded with {}.'.format(resp.status),
                 defer_now=True)
 
 
