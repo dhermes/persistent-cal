@@ -23,6 +23,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
+import functools
 import json
 import logging
 import re
@@ -115,7 +116,7 @@ def DeferFunctionDecorator(method):
         passed in. In the case that defer_now=True, the new function
         will spawn a task in the deferred queue at /workers.
   """
-
+  @functools.wraps(method)
   def DeferrableMethod(*args, **kwargs):
     """Returned function that uses method from outside scope
 
@@ -136,7 +137,8 @@ def DeferFunctionDecorator(method):
   return DeferrableMethod
 
 
-def MonthlyCleanup(relative_date, defer_now=False):
+@DeferFunctionDecorator
+def MonthlyCleanup(relative_date):
   """Deletes events older than three months.
 
   Will delete events from the datastore that are older than three months. First
@@ -151,15 +153,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
 
   Args:
     relative_date: date provided by calling script. Expected to be current date.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  logging.info('MonthlyCleanup called with: {!r}'.format(locals()))
-
-  if defer_now:
-    defer(MonthlyCleanup, relative_date, defer_now=False, _url='/workers')
-    return
-
   prior_date_day = relative_date.day
 
   prior_date_month = relative_date.month - 3
@@ -178,7 +172,7 @@ def MonthlyCleanup(relative_date, defer_now=False):
     msg = ('MonthlyCleanup called with bad date {relative_date} '
            'on {today}.'.format(relative_date=relative_date, today=today))
     logging.info(msg)
-    EmailAdmins(msg, defer_now=True)
+    EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
     return
 
   prior_date_as_str = time_utils.FormatTime(prior_date)
@@ -229,9 +223,9 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
 
 
 # pylint:disable-msg=R0913
+@DeferFunctionDecorator
 def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
-                            link_index=0, upcoming=None,
-                            last_used_uid=None, defer_now=False):
+                            link_index=0, upcoming=None, last_used_uid=None):
   """Updates a list of calendar subscriptions for a user.
 
   Loops through each subscription URL in links (or user_cal.calendars) and calls
@@ -258,17 +252,7 @@ def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
         to be passed in only by calls from UpdateUserSubscriptions. In the case
         it is not None, it will serve as a starting index within the set of UIDs
         from the first subscription (first element of links) that is updated.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  logging.info('UpdateUserSubscriptions called with: {!r}'.format(locals()))
-
-  if defer_now:
-    defer(UpdateUserSubscriptions, user_cal, credentials=credentials,
-          links=links, link_index=link_index, upcoming=upcoming,
-          last_used_uid=last_used_uid, defer_now=False, _url='/workers')
-    return
-
   if links is None:
     links = user_cal.calendars
 
@@ -301,7 +285,7 @@ def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
           msg = 'silently failed operation on {uid} from {link}'.format(
               uid=uid, link=link)
           logging.info(msg)
-          EmailAdmins(msg, defer_now=True)
+          EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
     defer(UpdateUserSubscriptions, user_cal, credentials=credentials,
@@ -361,7 +345,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
              '{component.name}'.format(link=link, component=component))
       logging.info(msg)
       if component.name != 'VCALENDAR':
-        EmailAdmins(msg, defer_now=True)
+        EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
     else:
       event, failed = Event.from_ical_event(component, current_user,
                                             credentials=credentials)

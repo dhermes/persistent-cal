@@ -148,6 +148,7 @@ class AddSubscription(ExtendedHandler):
       logging.info('Credentials initialized')
       CREDENTIALS = InitCredentials()
 
+    # pylint:disable-msg=E1123
     UpdateUserSubscriptions(user_cal, credentials=CREDENTIALS, defer_now=True)
     # pylint:disable-msg=E1103
     self.response.out.write(json.dumps(user_cal.calendars))
