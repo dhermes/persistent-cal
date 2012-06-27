@@ -37,10 +37,10 @@ import uritemplate
 
 # App engine specific libraries
 from google.appengine.ext import db
-from google.appengine.ext.deferred import defer
 
 # App specific libraries
 from custom_exceptions import CredentialsLoadError
+from handler_utils import DeferFunctionDecorator
 from handler_utils import EmailAdmins
 import secret_key
 
@@ -139,7 +139,8 @@ def RetrieveCalendarDiscoveryDoc(credentials=None):
   return success, content
 
 
-def CheckCalendarDiscoveryDoc(credentials=None, defer_now=False):
+@DeferFunctionDecorator
+def CheckCalendarDiscoveryDoc(credentials=None):
   """Checks a cached discovery doc against the current doc for calendar service.
 
   If the discovery can't be retrieved or the cached copy disagrees with the
@@ -149,20 +150,12 @@ def CheckCalendarDiscoveryDoc(credentials=None, defer_now=False):
     credentials: An OAuth2Credentials object used to build a service object.
         In the case the credentials is None, attempt to get credentials from
         the default credentials.
-    defer_now: Boolean to determine whether or not a task should be spawned, by
-        default this is False.
   """
-  logging.info('CheckCalendarDiscoveryDoc called with: {!r}'.format(locals()))
-
-  if defer_now:
-    defer(CheckCalendarDiscoveryDoc, credentials=credentials,
-          defer_now=False, _url='/workers')
-    return
-
   success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
       credentials=credentials)
 
   if not success:
+    # pylint:disable-msg=E1123
     EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
     return
 
@@ -170,6 +163,7 @@ def CheckCalendarDiscoveryDoc(credentials=None, defer_now=False):
     cached_discovery_doc = fh.read()
 
   if cached_discovery_doc != current_discovery_doc:
+    # pylint:disable-msg=E1123
     EmailAdmins('Current discovery doc disagrees with cached version.',
                 defer_now=True)
 

@@ -23,7 +23,6 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
-import functools
 import json
 import logging
 import re
@@ -34,11 +33,11 @@ from icalendar import Calendar
 # App engine specific libraries
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_errors
-from google.appengine.ext.deferred import defer
 from google.appengine import runtime
 
 # App specific libraries
 from custom_exceptions import BadInterval
+from handler_utils import DeferFunctionDecorator
 from handler_utils import EmailAdmins
 from models import Event
 import time_utils
@@ -104,39 +103,6 @@ def WhiteList(link):
   return valid, transformed
 
 
-def DeferFunctionDecorator(method):
-  """Decorator that allows a function to accept a defer_now argument.
-
-  Args:
-    method: a callable object
-
-  Returns:
-    A new function which will do the same work as method, will also
-        accept a defer_now keyword argument, and will log the arguments
-        passed in. In the case that defer_now=True, the new function
-        will spawn a task in the deferred queue at /workers.
-  """
-  @functools.wraps(method)
-  def DeferrableMethod(*args, **kwargs):
-    """Returned function that uses method from outside scope
-
-    Adds behavior for logging and deferred queue.
-    """
-    logging.info('{method.func_name} called with: {locals!r}'.format(
-        method=method, locals=locals()))
-
-    defer_now = kwargs.pop('defer_now', False)
-    if defer_now:
-      kwargs['defer_now'] = False
-      kwargs['_url'] = '/workers'
-
-      defer(DeferrableMethod, *args, **kwargs)
-    else:
-      return method(*args, **kwargs)
-
-  return DeferrableMethod
-
-
 @DeferFunctionDecorator
 def MonthlyCleanup(relative_date):
   """Deletes events older than three months.
@@ -183,6 +149,7 @@ def MonthlyCleanup(relative_date):
     event.delete(skip_gcal=True)
 
 
+@DeferFunctionDecorator
 def UpdateUpcoming(user_cal, upcoming, credentials=None):
   """Updates the GCal inst. by deleting events removed from extern. calendar.
 
@@ -288,14 +255,15 @@ def UpdateUserSubscriptions(user_cal, credentials=None, links=None,
           EmailAdmins(msg, defer_now=True)  # pylint:disable-msg=E1123
   except (runtime.DeadlineExceededError, urlfetch_errors.DeadlineExceededError):
     # NOTE: upcoming has possibly been updated inside the try statement
-    defer(UpdateUserSubscriptions, user_cal, credentials=credentials,
-          links=links, link_index=index, upcoming=upcoming, last_used_uid=uid,
-          defer_now=False, _url='/workers')
+    # pylint:disable-msg=E1123
+    UpdateUserSubscriptions(user_cal, credentials=credentials, links=links,
+                            link_index=index, upcoming=upcoming,
+                            last_used_uid=uid, defer_now=True)
     return
 
   # If the loop completes without timing out
-  defer(UpdateUpcoming, user_cal, upcoming,
-        credentials=credentials, _url='/workers')
+  # pylint:disable-msg=E1123
+  UpdateUpcoming(user_cal, upcoming, credentials=credentials, defer_now=True)
 
 
 def UpdateSubscription(link, current_user, credentials=None, start_uid=None):

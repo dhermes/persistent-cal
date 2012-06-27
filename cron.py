@@ -81,7 +81,7 @@ class CheckDiscoveryDoc(ExtendedHandler):
     if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
       return
 
-    CheckCalendarDiscoveryDoc(defer_now=True)
+    CheckCalendarDiscoveryDoc(defer_now=True)  # pylint:disable-msg=E1123
 
 
 class CleanupHandler(ExtendedHandler):
