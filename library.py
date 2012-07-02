@@ -33,6 +33,7 @@ from icalendar import Calendar
 # App engine specific libraries
 from google.appengine.api import urlfetch
 from google.appengine.api import urlfetch_errors
+from google.appengine.ext import ndb
 from google.appengine import runtime
 
 # App specific libraries
@@ -176,7 +177,7 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
     now = datetime.datetime.utcnow()
     for uid in user_cal.upcoming:
       if uid not in upcoming:
-        event = Event.get_by_key_name(uid)
+        event = ndb.Key(Event, uid).get()
         if event.end.to_datetime() > now:  # pylint:disable-msg=E1103
           # If federated identity not set, User.__cmp__ only uses email
           event.attendees.remove(user_cal.owner)  # pylint:disable-msg=E1103

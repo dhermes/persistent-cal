@@ -23,12 +23,10 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 # General libraries
 import datetime
-import json
 import logging
 
 # App engine specific libraries
-from google.appengine.api import users
-from google.appengine.ext import db
+from google.appengine.ext import ndb
 
 # App specific libraries
 from custom_exceptions import InappropriateAPIAction
@@ -41,7 +39,7 @@ import time_utils
 CALENDAR_ID = 'vhoam1gb7uqqoqevu91liidi80@group.calendar.google.com'
 
 
-class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
+class TimeKeyword(ndb.Model):  # pylint:disable-msg=R0904
   """Model for representing a time with an associated keyword as well.
 
   This is in place because the API specification calls for times to be
@@ -49,8 +47,9 @@ class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
   {'date': '2012-01-01'}, so both the string value and the keyword are
   useful to keep around.
   """
-  keyword = db.StringProperty(required=True)
-  value = db.StringProperty(required=True)
+  # pylint:disable-msg=E1101
+  keyword = ndb.StringProperty(required=True)
+  value = ndb.StringProperty(required=True)
 
   @classmethod
   # pylint:disable-msg=C0103
@@ -113,70 +112,6 @@ class TimeKeyword(db.Model):  # pylint:disable-msg=R0904
     return 'TimeKeyword({!r})'.format(self.as_dict())
 
 
-class TimeKeywordProperty(db.Property):
-  """Property for representing TimeKeyword objects on a db.Model."""
-
-  data_type = TimeKeyword
-
-  def get_value_for_datastore(self, model_instance):  # pylint:disable-msg=C0103
-    """A custom method for turning a model instance into a string.
-
-    Args:
-      model_instance: The instance to be converted into a value
-
-    Returns:
-      A JSON string containing the dictionary value of the object
-    """
-    time_val = super(TimeKeywordProperty, self).get_value_for_datastore(
-        model_instance)
-    return json.dumps(time_val.as_dict())
-
-  def make_value_from_datastore(self, value):  # pylint:disable-msg=C0103
-    """A custom method for making the property from the datastore.
-
-    Args:
-      value: The value to be made from the datastore.
-
-    Returns:
-      An instance of TimeKeyword made from the value
-    """
-    try:
-      value_dict = json.loads(value)
-      if isinstance(value_dict, dict) and len(value_dict) == 1:
-        key = value_dict.keys()[0]
-        return TimeKeyword(keyword=key,
-                           value=value_dict[key])
-    except ValueError:
-      pass
-
-    return None
-
-  def validate(self, value):  # pylint:disable-msg=C0103
-    """A custom validator for setting values as this property.
-
-    Args:
-      value: The value to be validated
-    """
-    if value is not None and not isinstance(value, TimeKeyword):
-      raise db.BadValueError(
-          'Property {name} must be convertible to a '
-          'TimeKeyword instance ({value}).'.format(name=self.name, value=value))
-    return super(TimeKeywordProperty, self).validate(value)
-
-  def empty(self, value):  # pylint:disable-msg=C0103
-    """Boolean indicating if property is empty.
-
-    This is a property specific to db.Property and its children.
-
-    Args:
-      value: The value to be called empty of not
-
-    Returns:
-      Boolean whether or not empty
-    """
-    return not value
-
-
 def ConvertedDescription(ical_event):
   """Parses and converts a description from an iCal event.
 
@@ -208,16 +143,17 @@ def ConvertedDescription(ical_event):
   return description, location
 
 
-class Event(db.Model):  # pylint:disable-msg=R0904
+class Event(ndb.Model):  # pylint:disable-msg=R0904
   """Holds data for a calendar event (including shared attendees)."""
-  description = db.TextProperty(default='')
-  start = TimeKeywordProperty(required=True)
-  end = TimeKeywordProperty(required=True)
-  location = db.StringProperty(default='')
-  summary = db.StringProperty(required=True)
-  attendees = db.ListProperty(users.User, required=True)
-  gcal_edit = db.StringProperty()
-  sequence = db.IntegerProperty(default=0)
+  # pylint:disable-msg=E1101
+  description = ndb.TextProperty(default='')
+  start = ndb.StructuredProperty(TimeKeyword, required=True)
+  end = ndb.StructuredProperty(TimeKeyword, required=True)
+  location = ndb.StringProperty(default='')
+  summary = ndb.StringProperty(required=True)
+  attendees = ndb.UserProperty(repeated=True)
+  gcal_edit = ndb.StringProperty()
+  sequence = ndb.IntegerProperty(default=0)
 
   def insert(self, credentials=None):  # pylint:disable-msg=C0103
     """Will insert the event into GCal and then put the values into datastore.
@@ -357,7 +293,7 @@ class Event(db.Model):  # pylint:disable-msg=R0904
     event_data['start'] = TimeKeyword.from_ical_event(ical_event, 'dtstart')
     event_data['end'] = TimeKeyword.from_ical_event(ical_event, 'dtend')
 
-    event = cls.get_by_key_name(uid)
+    event = ndb.Key(cls, uid).get()
     if event is not None:
       changed = False
       for attr, value in event_data.iteritems():
@@ -378,11 +314,11 @@ class Event(db.Model):  # pylint:disable-msg=R0904
       return event, not success
     else:
       # pylint:disable-msg=W0142
-      event = cls(key_name=uid, attendees=[current_user], **event_data)
+      event = cls(key=ndb.Key(cls, uid), attendees=[current_user], **event_data)
       success = event.insert(credentials=credentials)
       return event, not success
 
-  @db.ComputedProperty
+  @ndb.ComputedProperty
   def end_date(self):  # pylint:disable-msg=C0103
     """Derived property that turns end into a date string."""
     end_datetime = self.end.to_datetime()
@@ -410,15 +346,16 @@ class Event(db.Model):  # pylint:disable-msg=R0904
             'attendees': self.attendee_emails()}
 
   def __repr__(self):
-    return 'Event(name={})'.format(self.key().name())
+    return 'Event(name={})'.format(self.key.id())
 
 
-class UserCal(db.Model):  # pylint:disable-msg=R0904
+class UserCal(ndb.Model):  # pylint:disable-msg=R0903
   """Holds data for a calendar event (including shared owners)."""
-  owner = db.UserProperty(required=True)
-  calendars = db.StringListProperty(required=True)
-  update_intervals = db.ListProperty(long, required=True)
-  upcoming = db.ListProperty(str, required=True)
+  # pylint:disable-msg=E1101
+  owner = ndb.UserProperty(required=True)
+  calendars = ndb.StringProperty(repeated=True)
+  update_intervals = ndb.IntegerProperty(repeated=True)
+  upcoming = ndb.StringProperty(repeated=True)
 
   def put(self):  # pylint:disable-msg=C0103
     """Customized put function that first sorts the list in upcoming."""
@@ -427,4 +364,4 @@ class UserCal(db.Model):  # pylint:disable-msg=R0904
 
   def __repr__(self):
     return 'UserCal(owner={owner},name={name})'.format(owner=self.owner.email(),
-                                                       name=self.key().name())
+                                                       name=self.key.id())

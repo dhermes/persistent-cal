@@ -29,6 +29,7 @@ import logging
 # App engine specific libraries
 from google.appengine.api import users
 from google.appengine.ext import deferred
+from google.appengine.ext import ndb
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import login_required
 
@@ -71,10 +72,10 @@ class MainHandler(ExtendedHandler):
 
     # guaranteed to be a user since login_required
     current_user = users.get_current_user()
-    user_cal = UserCal.get_by_key_name(current_user.user_id())
+    user_cal = ndb.Key(UserCal, current_user.user_id()).get()
     if user_cal is None:
       base_interval = ConvertToInterval(datetime.datetime.utcnow())
-      user_cal = UserCal(key_name=current_user.user_id(),
+      user_cal = UserCal(key=ndb.Key(UserCal, current_user.user_id()),
                          owner=current_user,
                          calendars=[],
                          update_intervals=[base_interval])
@@ -124,9 +125,9 @@ class AddSubscription(ExtendedHandler):
       logging.info('no_user:fail')
       return
 
-    user_cal = UserCal.get_by_key_name(current_user.user_id())
+    user_cal = ndb.Key(UserCal, current_user.user_id()).get()
     if user_cal is None:
-      user_cal = UserCal(key_name=current_user.user_id(),
+      user_cal = UserCal(key=ndb.Key(UserCal, current_user.user_id()),
                          owner=current_user,
                          calendars=[link])
     elif link not in user_cal.calendars and len(user_cal.calendars) < 4:
@@ -179,7 +180,7 @@ class ChangeFrequency(ExtendedHandler):
 
     frequency = self.request.get('frequency', None)
 
-    user_cal = UserCal.get_by_key_name(current_user.user_id())
+    user_cal = ndb.Key(UserCal, current_user.user_id()).get()
     if frequency in FREQUENCIES and user_cal is not None:
       if user_cal.update_intervals:  # pylint:disable-msg=E1103
         base_interval = user_cal.update_intervals[0]  # pylint:disable-msg=E1103
@@ -213,7 +214,7 @@ class GetInfoHandler(ExtendedHandler):
       logging.info('no_user:fail')
       return
 
-    user_cal = UserCal.get_by_key_name(current_user.user_id())
+    user_cal = ndb.Key(UserCal, current_user.user_id()).get()
     if user_cal is None:
       self.response.out.write(json.dumps('no_cal:fail'))
       logging.info('no_cal:fail')
