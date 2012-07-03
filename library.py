@@ -319,7 +319,7 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
       event, failed = Event.from_ical_event(component, current_user,
                                             credentials=credentials)
 
-      uid = event.key().name()
+      uid = event.key.id()
       if failed:
         yield (uid, False, True)
       else:
