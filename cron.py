@@ -59,7 +59,7 @@ class MainHandler(ExtendedHandler):
     now_interval = ConvertToInterval(now)
     credentials = None
 
-    current_users = UserCal.gql('WHERE update_intervals = :1', now_interval)
+    current_users = UserCal.query(UserCal.update_intervals == now_interval)
     for user_cal in current_users:
       if user_cal.calendars:
         if credentials is None:

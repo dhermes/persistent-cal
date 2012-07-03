@@ -143,7 +143,7 @@ def MonthlyCleanup(relative_date):
     return
 
   prior_date_as_str = time_utils.FormatTime(prior_date)
-  old_events = Event.gql('WHERE end_date <= :date', date=prior_date_as_str)
+  old_events = Event.query(Event.end_date <= prior_date_as_str)
   for event in old_events:
     logging.info('{event} removed from datastore. {event.gcal_edit} '
                  'remains in calendar.'.format(event=event))

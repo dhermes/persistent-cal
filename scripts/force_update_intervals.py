@@ -54,9 +54,9 @@ os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
 def ForceUpdate(now_intervals):
   """Forces an update outside of a cron job for a list of update intervals."""
   legitimate_intervals = list(set(range(56)).intersection(now_intervals))
-  # pylint:disable-msg=E1101
-  matching_users = UserCal.gql('WHERE update_intervals IN :1',
-                               legitimate_intervals)
+  matching_users = UserCal.query(
+      UserCal.update_intervals.IN(legitimate_intervals))
   for user_cal in matching_users:
+    # pylint:disable-msg=E1123
     UpdateUserSubscriptions(user_cal, credentials=CREDENTIALS, defer_now=True)
     print(user_cal)
