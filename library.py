@@ -147,7 +147,7 @@ def MonthlyCleanup(relative_date):
   for event in old_events:
     logging.info('{event} removed from datastore. {event.gcal_edit} '
                  'remains in calendar.'.format(event=event))
-    event.delete(skip_gcal=True)
+    event.delete()
 
 
 @DeferFunctionDecorator
