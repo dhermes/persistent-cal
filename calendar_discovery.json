@@ -4,7 +4,7 @@
  "id": "calendar:v3",
  "name": "calendar",
  "version": "v3",
- "revision": "20120423",
+ "revision": "20120710",
  "title": "Calendar API",
  "description": "Lets you manipulate events and other calendar data.",
  "icons": {
@@ -364,7 +364,7 @@
     },
     "attendeesOmitted": {
      "type": "boolean",
-     "description": "Whether attendees have been omitted from the event's representation. When retrieving an event, this is due to a restriction specified by the 'maxAttendee' query parameter. When updating an event, this can be used to only update the participant's response. Optional. The default is False."
+     "description": "Whether attendees may have been omitted from the event's representation. When retrieving an event, this may be due to a restriction specified by the 'maxAttendee' query parameter. When updating an event, this can be used to only update the participant's response. Optional. The default is False."
     },
     "colorId": {
      "type": "string",
@@ -413,7 +413,8 @@
      }
     },
     "endTimeUnspecified": {
-     "type": "boolean"
+     "type": "boolean",
+     "description": "Whether the end time is really unspecified. An end time is still provided for compatibility reasons, even if this attribute is set to True. The default is False."
     },
     "etag": {
      "type": "string",
