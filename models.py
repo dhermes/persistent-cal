@@ -244,7 +244,7 @@ class Event(ndb.Model):  # pylint:disable-msg=R0904
     if delete_response is None:
       return
 
-    super(Event, self).delete()
+    self.key.delete()
 
   @classmethod
   # pylint:disable-msg=C0103
