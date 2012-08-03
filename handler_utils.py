@@ -32,8 +32,8 @@ from google.appengine.api import mail
 from google.appengine.api import urlfetch_errors
 from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
-from google.appengine.ext import webapp
 from google.appengine import runtime
+import webapp2
 from webapp2_extras import jinja2
 
 # App specific libraries
@@ -139,10 +139,10 @@ def DeadlineDecorator(method):
   return WrappedMethod
 
 
-class ExtendedHandler(webapp.RequestHandler):
-  """A custom version of GAE webapp.RequestHandler.
+class ExtendedHandler(webapp2.RequestHandler):
+  """A custom version of GAE webapp2.RequestHandler.
 
-  This subclass of webapp.RequestHandler defines a handle_exception
+  This subclass of webapp2.RequestHandler defines a handle_exception
   function that will email administrators when an exception
   occurs. In addition, the __new__ method is overridden
   to allow custom wrappers to be placed around the HTTP verbs
@@ -152,7 +152,7 @@ class ExtendedHandler(webapp.RequestHandler):
   def __new__(cls, *args, **kwargs):  # pylint:disable-msg=W0142
     """Constructs the object.
 
-    This is explicitly intended for Google App Engine's webapp.RequestHandler.
+    This is explicitly intended for Google App Engine's webapp2.RequestHandler.
     Requests only suport 7 of the 9 HTTP verbs, 4 of which we will
     decorate: get, post, put and delete. The other three supported
     (head, options, trace) may be added at a later time.
@@ -171,7 +171,7 @@ class ExtendedHandler(webapp.RequestHandler):
 
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
 
-  @webapp.cached_property
+  @webapp2.cached_property
   def Jinja2(self):
     """Cached property holding a Jinja2 instance."""
     return jinja2.get_jinja2(app=self.app)

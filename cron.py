@@ -25,7 +25,7 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 import datetime
 
 # App engine specific libraries
-from google.appengine.ext import webapp
+import webapp2
 
 # App specific libraries
 from google_api_utils import CheckCalendarDiscoveryDoc
@@ -99,7 +99,7 @@ class CleanupHandler(ExtendedHandler):
     MonthlyCleanup(now.date(), defer_now=True)  # pylint:disable-msg=E1123
 
 
-APPLICATION = webapp.WSGIApplication([
+APPLICATION = webapp2.WSGIApplication([
     ('/cron', MainHandler),
     ('/cron-weekly', CheckDiscoveryDoc),
     ('/cron-monthly', CleanupHandler),

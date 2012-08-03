@@ -30,8 +30,8 @@ import logging
 from google.appengine.api import users
 from google.appengine.ext import deferred
 from google.appengine.ext import ndb
-from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import login_required
+import webapp2
 
 # App specific libraries
 from google_api_utils import InitCredentials
@@ -272,7 +272,7 @@ class Throw404(ExtendedHandler):
     self.RenderResponse('404.html')
 
 
-APPLICATION = webapp.WSGIApplication([
+APPLICATION = webapp2.WSGIApplication([
     ('/', MainHandler),
     ('/workers', DeferredHandler),
     ('/add', AddSubscription),
