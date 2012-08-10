@@ -21,6 +21,6 @@ result = urlfetch.fetch(url=url, method=urlfetch.GET, headers={'Cookie': cookie_
 
 
 PyLint-ing via:
-APPENGINE_PATH="/Applications/GoogleAppEngineLauncher.app/Contents/Resources/GoogleAppEngine-default.bundle/Contents/Resources/google_appengine";
+APPENGINE_PATH="$(readlink `which appcfg.py` | xargs dirname)";
 WEBAPP2_PATH="$APPENGINE_PATH/lib/webapp2";
 PYTHONPATH=$PYTHONPATH:$APPENGINE_PATH:$WEBAPP2_PATH pylint --rcfile=pylintrc library.py

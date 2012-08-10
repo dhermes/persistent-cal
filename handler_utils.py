@@ -180,7 +180,7 @@ class ExtendedHandler(webapp2.RequestHandler):
     """Use Jinja2 instance to render template and write to output.
 
     Args:
-      template: filename (relative to ~/templates) that we are rendering
+      template: filename (relative to $PROJECT/templates) that we are rendering
       context: keyword arguments corresponding to variables in template
     """
     rendered_value = self.Jinja2.render_template(template, **context)

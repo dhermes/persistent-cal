@@ -1,0 +1,54 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    <title>{% block title %}{% endblock %}</title>
+    {% block head %}{% endblock %}
+  </head>
+  <body>
+    <div class="g-doc">
+
+      <div id="bd" class="g-section">
+
+        <div class="g-section g-tpl-160">
+
+          <div id="ae-content" class="g-unit">
+            {% block body %}{% endblock %}
+          </div>
+
+        </div>
+
+      </div>
+
+    {% block final %}{% endblock %}
+    </div>
+    <script type="text/javascript">
+    //<![CDATA[
+
+    function walk(element, condition, operation) {
+      if (!element) return;
+      if (condition(element)) {
+        operation(element);
+        return;
+      }
+      for (var e = element.firstChild; e != null; e = e.nextSibling) {
+        walk(e, condition, operation);
+      }
+    }
+
+    function isCurrentLink(e) {
+      if (e.tagName != "A") return false;
+      re = new RegExp("^" + e.href + "(/.*)?(\\?.*)?$");
+      return re.test(window.location.href);
+    }
+
+    function makeSelected(e) {
+      e.className = "ae-nav-selected";
+    }
+
+    walk(document.getElementById("menu"), isCurrentLink, makeSelected);
+
+    //]]>
+    </script>
+  </body>
+</html>

@@ -20,6 +20,10 @@ handlers:
   static_dir: scripts
   mime_type: "text/plain"
 
+- url: /admin/interactive|/admin/interactive/execute
+  script: interactive.APPLICATION
+  login: admin
+
 - url: /cron
   script: cron.APPLICATION
   login: admin
