@@ -32,19 +32,31 @@ from google.appengine.api import mail
 from google.appengine.api import urlfetch_errors
 from google.appengine.ext.deferred import defer
 from google.appengine.ext.deferred import PermanentTaskFailure
+from google.appengine.ext import ndb
 from google.appengine import runtime
 import webapp2
 from webapp2_extras import jinja2
 
-# App specific libraries
-from admins import ADMINS_TO
 
-
+ADMINS = {}
+ADMINS_KEY = 'admins'
 # Without using the kwarg 'app' in get_jinja2, webapp2.get_app() is
 # used, which returns the active app instance.
 # [Reference: http://webapp-improved.appspot.com/api/webapp2.html]
 JINJA2_RENDERER = jinja2.get_jinja2()
 RENDERED_500_PAGE = JINJA2_RENDERER.render_template('500.html')
+
+
+class AdminsTo(ndb.Model):
+  """Model for representing a list of project admins.
+
+  See http://code.google.com/appengine/docs/python/mail/emailmessagefields.html
+  """
+  admins = ndb.UserProperty(repeated=True)
+
+  def AsString(self):
+    """Uses the user emails to create a comma separated list for an email."""
+    return ', '.join([admin.email() for admin in self.admins])
 
 
 def DeferFunctionDecorator(method):
@@ -85,15 +97,19 @@ def EmailAdmins(error_msg):
   """Sends email to admins with the preferred message, with option to defer.
 
   Uses the template error_notify.templ to generate an email with the {error_msg}
-  sent to the list of admins in admins.ADMINS_TO.
+  sent to the list of admins in ADMINS['TO'].
 
   Args:
     error_msg: A string containing an error to be sent to admins by email
   """
+  if 'TO' not in ADMINS:
+    admins_to = ndb.Key(AdminsTo, ADMINS_KEY).get()
+    ADMINS['TO'] = admins_to.AsString()
+
   sender = 'Persistent Cal Errors <errors@persistent-cal.appspotmail.com>'
   subject = 'Persistent Cal Error: Admin Notify'
   body = JINJA2_RENDERER.render_template('error_notify.templ', error=error_msg)
-  mail.send_mail(sender=sender, to=ADMINS_TO,
+  mail.send_mail(sender=sender, to=ADMINS['TO'],
                  subject=subject, body=body)
 
 
