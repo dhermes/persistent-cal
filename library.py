@@ -168,8 +168,6 @@ def UpdateUpcoming(user_cal, upcoming, credentials=None):
         In the case the credentials is the default value of None, future
         methods will attempt to get credentials from the default credentials.
   """
-  logging.info('UpdateUpcoming called with: {!r}'.format(locals()))
-
   upcoming.sort()
   if user_cal.upcoming != upcoming:
     now = datetime.datetime.utcnow()
