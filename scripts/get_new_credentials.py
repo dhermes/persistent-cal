@@ -15,7 +15,7 @@
 # limitations under the License.
 
 
-"""Gets new credentials using the keys in secret_key.py.
+"""Gets new credentials using the keys in the datastore.
 
 From Sample in project source wiki:
 http://code.google.com/p/google-api-python-client/wiki/OAuth2#Command-Line

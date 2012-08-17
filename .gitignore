@@ -3,7 +3,3 @@
 #*
 *.pyc
 persistent-cal
-_calendar.dat
-_admins.py
-_secret_key.py
-gcal_events.json
