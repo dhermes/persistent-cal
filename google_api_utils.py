@@ -31,7 +31,7 @@ from apiclient.discovery import DISCOVERY_URI
 from apiclient.discovery import build_from_document
 from apiclient.errors import HttpError
 import httplib2
-from oauth2client.appengine import CredentialsProperty
+from oauth2client.appengine import CredentialsModel
 from oauth2client.appengine import StorageByKeyName
 import uritemplate
 
@@ -50,11 +50,6 @@ DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
 
 
-class Credentials(db.Model):  # pylint:disable-msg=R0904
-  """A Credentials class for storing calendar credentials."""
-  credentials = CredentialsProperty()
-
-
 def InitCredentials(keyname=CREDENTIALS_KEYNAME):
   """Initializes an OAuth2Credentials object from a file.
 
@@ -65,7 +60,7 @@ def InitCredentials(keyname=CREDENTIALS_KEYNAME):
   Returns:
     An OAuth2Credentials object.
   """
-  storage = StorageByKeyName(Credentials, keyname, 'credentials')
+  storage = StorageByKeyName(CredentialsModel, keyname, 'credentials')
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:

@@ -26,12 +26,12 @@ http://code.google.com/p/google-api-python-client/wiki/OAuth2#Command-Line
 import os
 
 # Third-party libraries
+from oauth2client.appengine import CredentialsModel
 from oauth2client.appengine import StorageByKeyName
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
 
 # App specific libraries
-from google_api_utils import Credentials
 import secret_key
 
 
@@ -43,7 +43,7 @@ def main():
 
   Must be run from within remote_api.
   """
-  storage = StorageByKeyName(Credentials, 'calendar.dat', 'credentials')
+  storage = StorageByKeyName(CredentialsModel, 'calendar.dat', 'credentials')
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
