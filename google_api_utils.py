@@ -36,18 +36,26 @@ from oauth2client.appengine import StorageByKeyName
 import uritemplate
 
 # App engine specific libraries
-from google.appengine.ext import db
+from google.appengine.ext import ndb
 
 # App specific libraries
 from custom_exceptions import CredentialsLoadError
 from handler_utils import DeferFunctionDecorator
 from handler_utils import EmailAdmins
-import secret_key
 
 
 CREDENTIALS_KEYNAME = 'calendar.dat'
 DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
 DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
+SECRET_KEY = {}
+SECRET_KEY_DB_KEY = 'secret_key'
+
+
+class SecretKey(ndb.Model):
+  """Model for representing a project secret keys."""
+  client_id = ndb.StringProperty(required=True)
+  client_secret = ndb.StringProperty(required=True)
+  developer_key = ndb.StringProperty(required=True)
 
 
 def InitCredentials(keyname=CREDENTIALS_KEYNAME):
@@ -89,6 +97,10 @@ def InitService(credentials=None, keyname=CREDENTIALS_KEYNAME):
   if credentials is None:
     credentials = InitCredentials(keyname=keyname)
 
+  if 'DEVELOPER_KEY' not in SECRET_KEY:
+    secret_key = ndb.Key(SecretKey, SECRET_KEY_DB_KEY).get()
+    SECRET_KEY['DEVELOPER_KEY'] = secret_key.developer_key
+
   http = httplib2.Http()
   http = credentials.authorize(http)
 
@@ -98,7 +110,7 @@ def InitService(credentials=None, keyname=CREDENTIALS_KEYNAME):
   return build_from_document(cached_discovery_doc,
                              DISCOVERY_URI,
                              http=http,
-                             developerKey=secret_key.DEVELOPER_KEY)
+                             developerKey=SECRET_KEY['DEVELOPER_KEY'])
 
 
 def RetrieveCalendarDiscoveryDoc(credentials=None):

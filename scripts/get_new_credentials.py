@@ -32,7 +32,8 @@ from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.tools import run
 
 # App specific libraries
-import secret_key
+from google_api_utils import SecretKey
+from google_api_utils import SECRET_KEY_DB_KEY
 
 
 os.environ['HTTP_HOST'] = 'persistent-cal.appspot.com'
@@ -47,9 +48,10 @@ def main():
   credentials = storage.get()
 
   if credentials is None or credentials.invalid == True:
+    secret_key = ndb.Key(SecretKey, SECRET_KEY_DB_KEY).get()
     flow = OAuth2WebServerFlow(
-        client_id=secret_key.CLIENT_ID,
-        client_secret=secret_key.CLIENT_SECRET,
+        client_id=secret_key.client_id,
+        client_secret=secret_key.client_secret,
         scope='https://www.googleapis.com/auth/calendar',
         user_agent='persistent-cal-auth')
 
