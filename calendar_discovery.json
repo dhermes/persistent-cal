@@ -4,14 +4,14 @@
  "id": "calendar:v3",
  "name": "calendar",
  "version": "v3",
- "revision": "20120726",
+ "revision": "20120821",
  "title": "Calendar API",
  "description": "Lets you manipulate events and other calendar data.",
  "icons": {
   "x16": "http://www.google.com/images/icons/product/calendar-16.png",
   "x32": "http://www.google.com/images/icons/product/calendar-32.png"
  },
- "documentationLink": "http://code.google.com/apis/calendar/v3/using.html",
+ "documentationLink": "https://developers.google.com/google-apps/calendar/firstapp",
  "protocol": "rest",
  "baseUrl": "https://www.googleapis.com/calendar/v3/",
  "basePath": "/calendar/v3/",
@@ -505,6 +505,10 @@
     "guestsCanSeeOtherGuests": {
      "type": "boolean",
      "description": "Whether attendees other than the organizer can see who the event's attendees are. Optional. The default is False."
+    },
+    "hangoutLink": {
+     "type": "string",
+     "description": "An absolute link to the Google+ hangout associated with this event. Read-only."
     },
     "htmlLink": {
      "type": "string",
@@ -1761,7 +1765,7 @@
       },
       "showDeleted": {
        "type": "boolean",
-       "description": "Whether to include deleted events (with 'eventStatus' equals 'cancelled') in the result. Optional. The default is False.",
+       "description": "Whether to include deleted single events (with 'status' equals 'cancelled') in the result. Cancelled instances of recurring events will still be included if 'singleEvents' is False. Optional. The default is False.",
        "location": "query"
       },
       "showHiddenInvitations": {
