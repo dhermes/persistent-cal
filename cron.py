@@ -28,7 +28,6 @@ import datetime
 import webapp2
 
 # App specific libraries
-from google_api_utils import CheckCalendarDiscoveryDoc
 from google_api_utils import InitCredentials
 from handler_utils import ExtendedHandler
 from library import MonthlyCleanup
@@ -69,21 +68,6 @@ class MainHandler(ExtendedHandler):
                                 defer_now=True)
 
 
-class CheckDiscoveryDoc(ExtendedHandler):
-  """Handles cron requests to /cron-weekly.
-
-  Checks that the cached discovery doc is up to date and checks if a
-  future features doc has been added.
-  """
-
-  def get(self):  # pylint:disable-msg=C0103
-    """Updates once a month."""
-    if self.request.headers.get('X-AppEngine-Cron', '') != 'true':
-      return
-
-    CheckCalendarDiscoveryDoc(defer_now=True)  # pylint:disable-msg=E1123
-
-
 class CleanupHandler(ExtendedHandler):
   """Handles cron requests to /cron-monthly.
 
@@ -101,6 +85,5 @@ class CleanupHandler(ExtendedHandler):
 
 APPLICATION = webapp2.WSGIApplication([
     ('/cron', MainHandler),
-    ('/cron-weekly', CheckDiscoveryDoc),
     ('/cron-monthly', CleanupHandler),
     ], debug=True)

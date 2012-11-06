@@ -3,10 +3,6 @@ cron:
   url: /cron
   schedule: every 3 hours synchronized
 
-- description: calendar weekly check
-  url: /cron-weekly
-  schedule: every monday 00:00
-
 - description: calendar monthly clean up
   url: /cron-monthly
   schedule: 1 of month 00:00

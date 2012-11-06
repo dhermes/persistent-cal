@@ -22,14 +22,18 @@ __author__ = 'dhermes@google.com (Daniel Hermes)'
 
 
 # General libraries
+import datetime
 import json
 import logging
+import os
 import time
 
 # Third-party libraries
 from apiclient.discovery import DISCOVERY_URI
+from apiclient.discovery import _add_query_parameter
 from apiclient.discovery import build_from_document
 from apiclient.errors import HttpError
+from apiclient.errors import InvalidJsonError
 import httplib2
 from oauth2client.appengine import CredentialsModel
 from oauth2client.appengine import StorageByKeyName
@@ -40,13 +44,12 @@ from google.appengine.ext import ndb
 
 # App specific libraries
 from custom_exceptions import CredentialsLoadError
-from handler_utils import DeferFunctionDecorator
-from handler_utils import EmailAdmins
 
 
+CALENDAR_API_NAME = 'calendar'
+CALENDAR_API_VERSION = 'v3',
 CREDENTIALS_KEYNAME = 'calendar.dat'
-DISCOVERY_DOC_FILENAME = 'calendar_discovery.json'
-DISCOVERY_DOC_PARAMS = {'api': 'calendar', 'apiVersion': 'v3'}
+DISCOVERY_DOC_MAX_AGE = datetime.timedelta(days=7)
 SECRET_KEY = {}
 SECRET_KEY_DB_KEY = 'secret_key'
 
@@ -56,6 +59,34 @@ class SecretKey(ndb.Model):
   client_id = ndb.StringProperty(required=True)
   client_secret = ndb.StringProperty(required=True)
   developer_key = ndb.StringProperty(required=True)
+
+
+class DiscoveryDocument(ndb.Model):
+  """Model for representing a discovery document."""
+  document = ndb.StringProperty(required=True, indexed=False)
+  updated = ndb.DateTimeProperty(auto_now=True, indexed=False)
+
+  @property
+  def expired(self):
+    now = datetime.datetime.utcnow()
+    return now - self.updated > DISCOVERY_DOC_MAX_AGE
+
+  @classmethod
+  def build(cls, serviceName, version, **kwargs):
+    discoveryServiceUrl = kwargs.get('discoveryServiceUrl', DISCOVERY_URI)
+    key = ndb.Key(cls, serviceName, cls, version, cls, discoveryServiceUrl)
+    discovery_doc = key.get()
+
+    if discovery_doc is None or discovery_doc.expired:
+      # If None, RetrieveDiscoveryDoc() will use Defaults
+      credentials = kwargs.pop('credentials', None)
+      document = RetrieveDiscoveryDoc(
+          serviceName, version, credentials=credentials,
+          discoveryServiceUrl=discoveryServiceUrl)
+      discovery_doc = cls(key=key, document=document)
+      discovery_doc.put()
+
+    return build_from_document(discovery_doc.document, **kwargs)
 
 
 def InitCredentials(keyname=CREDENTIALS_KEYNAME):
@@ -101,78 +132,41 @@ def InitService(credentials=None, keyname=CREDENTIALS_KEYNAME):
     secret_key = ndb.Key(SecretKey, SECRET_KEY_DB_KEY).get()
     SECRET_KEY['DEVELOPER_KEY'] = secret_key.developer_key
 
-  http = httplib2.Http()
-  http = credentials.authorize(http)
-
-  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
-    cached_discovery_doc = fh.read()
-
-  return build_from_document(cached_discovery_doc,
-                             DISCOVERY_URI,
-                             http=http,
-                             developerKey=SECRET_KEY['DEVELOPER_KEY'])
+  return DiscoveryDocument.build(CALENDAR_API_NAME, CALENDAR_API_VERSION,
+                                 credentials=credentials,
+                                 developerKey=SECRET_KEY['DEVELOPER_KEY'])
 
 
-def RetrieveCalendarDiscoveryDoc(credentials=None):
-  """Retrieves the discovery doc for the calendar API service.
+def RetrieveDiscoveryDoc(serviceName, version, credentials=None,
+                         discoveryServiceUrl=DISCOVERY_URI):
+  params = {'api': serviceName, 'apiVersion': version}
+  requested_url = uritemplate.expand(discoveryServiceUrl, params)
 
-  Args:
-    credentials: An OAuth2Credentials object used to build a service object.
-        In the case the credentials is None, attempt to get the default
-        credentials.
+  # REMOTE_ADDR is defined by the CGI spec [RFC3875] as the environment
+  # variable that contains the network address of the client sending the
+  # request. If it exists then add that to the request for the discovery
+  # document to avoid exceeding the quota on discovery requests.
+  if 'REMOTE_ADDR' in os.environ:
+    requested_url = _add_query_parameter(requested_url, 'userIp',
+                                         os.environ['REMOTE_ADDR'])
 
-  Returns:
-    A tuple (success, content) where success is a boolean describing if the doc
-        was retrieved successfully and content (if success) contains the JSON
-        string contents of the discovery doc
-  """
   if credentials is None:
     credentials = InitCredentials()
-
   http = httplib2.Http()
   http = credentials.authorize(http)
 
-  requested_url = uritemplate.expand(DISCOVERY_URI, DISCOVERY_DOC_PARAMS)
   resp, content = http.request(requested_url)
 
-  success = False
-  if resp.status < 400:
-    try:
-      json.loads(content)
-      success = True
-    except ValueError:
-      pass
+  if resp.status >= 400:
+    raise HttpError(resp, content, uri=requested_url)
 
-  return success, content
+  try:
+    service = json.loads(content)
+  except ValueError:
+    raise InvalidJsonError(
+        'Bad JSON: {} from {}'.format(content, requested_url))
 
-
-@DeferFunctionDecorator
-def CheckCalendarDiscoveryDoc(credentials=None):
-  """Checks a cached discovery doc against the current doc for calendar service.
-
-  If the discovery can't be retrieved or the cached copy disagrees with the
-  current version, an email is sent to the administrators.
-
-  Args:
-    credentials: An OAuth2Credentials object used to build a service object.
-        In the case the credentials is None, attempt to get credentials from
-        the default credentials.
-  """
-  success, current_discovery_doc = RetrieveCalendarDiscoveryDoc(
-      credentials=credentials)
-
-  if not success:
-    # pylint:disable-msg=E1123
-    EmailAdmins('Couldn\'t retrieve discovery doc.', defer_now=True)
-    return
-
-  with open(DISCOVERY_DOC_FILENAME, 'rU') as fh:
-    cached_discovery_doc = fh.read()
-
-  if cached_discovery_doc != current_discovery_doc:
-    # pylint:disable-msg=E1123
-    EmailAdmins('Current discovery doc disagrees with cached version.',
-                defer_now=True)
+  return content
 
 
 def AttemptAPIAction(http_verb, num_attempts=3, log_msg=None,
