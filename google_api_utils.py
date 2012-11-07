@@ -72,12 +72,11 @@ class DiscoveryDocument(ndb.Model):
     return now - self.updated > DISCOVERY_DOC_MAX_AGE
 
   @classmethod
-  def build(cls, serviceName, version, **kwargs):
-    discoveryServiceUrl = kwargs.get('discoveryServiceUrl', DISCOVERY_URI)
+  def build(cls, serviceName, version, credentials, **kwargs):
+    discoveryServiceUrl = kwargs.pop('discoveryServiceUrl', DISCOVERY_URI)
     key = ndb.Key(cls, serviceName, cls, version, cls, discoveryServiceUrl)
     discovery_doc = key.get()
 
-    credentials = kwargs.pop('credentials', None)
     if discovery_doc is None or discovery_doc.expired:
       # If None, RetrieveDiscoveryDoc() will use Defaults
       document = RetrieveDiscoveryDoc(
@@ -86,7 +85,12 @@ class DiscoveryDocument(ndb.Model):
       discovery_doc = cls(key=key, document=document)
       discovery_doc.put()
 
-    return build_from_document(discovery_doc.document, **kwargs)
+    http = kwargs.get('http', None)
+    if http is None:
+      http = httplib2.Http()
+      kwargs['http'] = credentials.authorize(http)
+    return build_from_document(
+        discovery_doc.document, discoveryServiceUrl, **kwargs)
 
 
 def InitCredentials(keyname=CREDENTIALS_KEYNAME):
@@ -132,8 +136,9 @@ def InitService(credentials=None, keyname=CREDENTIALS_KEYNAME):
     secret_key = ndb.Key(SecretKey, SECRET_KEY_DB_KEY).get()
     SECRET_KEY['DEVELOPER_KEY'] = secret_key.developer_key
 
-  return DiscoveryDocument.build(CALENDAR_API_NAME, CALENDAR_API_VERSION,
-                                 credentials=credentials,
+  return DiscoveryDocument.build(CALENDAR_API_NAME,
+                                 CALENDAR_API_VERSION,
+                                 credentials,
                                  developerKey=SECRET_KEY['DEVELOPER_KEY'])
 
 
