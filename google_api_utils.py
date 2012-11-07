@@ -47,7 +47,7 @@ from custom_exceptions import CredentialsLoadError
 
 
 CALENDAR_API_NAME = 'calendar'
-CALENDAR_API_VERSION = 'v3',
+CALENDAR_API_VERSION = 'v3'
 CREDENTIALS_KEYNAME = 'calendar.dat'
 DISCOVERY_DOC_MAX_AGE = datetime.timedelta(days=7)
 SECRET_KEY = {}
