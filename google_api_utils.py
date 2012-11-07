@@ -77,9 +77,9 @@ class DiscoveryDocument(ndb.Model):
     key = ndb.Key(cls, serviceName, cls, version, cls, discoveryServiceUrl)
     discovery_doc = key.get()
 
+    credentials = kwargs.pop('credentials', None)
     if discovery_doc is None or discovery_doc.expired:
       # If None, RetrieveDiscoveryDoc() will use Defaults
-      credentials = kwargs.pop('credentials', None)
       document = RetrieveDiscoveryDoc(
           serviceName, version, credentials=credentials,
           discoveryServiceUrl=discoveryServiceUrl)
