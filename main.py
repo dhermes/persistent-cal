@@ -52,6 +52,7 @@ FREQUENCIES = {'three-hrs': [val for val in range(56)],
                'day': [8*val for val in range(56/8)],
                'two-day': [14*val for val in range(56/14)],
                'week': [56*val for val in range(56/56)]}
+MAX_RETRIES = 3
 
 
 class MainHandler(ExtendedHandler):
@@ -236,7 +237,18 @@ class DeferredHandler(deferred.TaskHandler, ExtendedHandler):
     a deferred job. Uses the post wrapper defined in ExtendedHandler to handle
     any errors that may occur in run_from_request.
     """
-    self.run_from_request()
+    try:
+      retry_count = int(
+          self.request.headers.get('X-AppEngine-TaskRetryCount'))
+      logging.debug('Retry count: %d', retry_count)
+    except (ValueError, TypeError):
+      logging.debug('Getting retry count failed.')
+      retry_count = 0
+
+    if retry_count < MAX_RETRIES:
+      self.run_from_request()
+    else:
+      raise deferred.PermanentTaskFailure('Exceeded number of retries.')
 
 
 class OwnershipVerifyHandler(ExtendedHandler):
