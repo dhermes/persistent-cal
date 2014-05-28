@@ -12,6 +12,14 @@ PYTZ_ZIP = ('https://pypi.python.org/packages/source/g/gaepytz/'
 PYTZ_FILENAME = 'gaepytz-2011h.zip'
 PYTZ_SUBDIR = 'gaepytz-2011h/pytz'
 PYTZ_MAINDIR = 'gaepytz-2011h/'
+PYTZ_CODE_DIR = 'pytz'
+
+ICALENDAR_ZIP = ('https://pypi.python.org/packages/source/i/icalendar/'
+                 'icalendar-3.6.2.zip#md5=e815c0bbef1097713555925235af0630')
+ICALENDAR_FILENAME = 'icalendar-3.6.2.zip'
+ICALENDAR_SUBDIR = 'icalendar-3.6.2/src/icalendar'
+ICALENDAR_MAINDIR = 'icalendar-3.6.2/'
+ICALENDAR_CODE_DIR = 'icalendar'
 
 
 def get_git_root():
@@ -51,9 +59,28 @@ print 'Downloading gae-pytz library'
 subprocess.call(['wget', PYTZ_ZIP])
 print 'Unzipping gae-pytz library'
 subprocess.call(['unzip', '-oq', PYTZ_FILENAME])
+print 'Removing existing gae-pytz code'
+subprocess.call(['rm', '-fr', PYTZ_CODE_DIR])
 print 'Moving library to project root'
 subprocess.call(['mv', PYTZ_SUBDIR, GIT_ROOT])
 print 'Removing gae-pytz unused files'
 subprocess.call(['rm', '-fr', PYTZ_MAINDIR])
 print 'Removing gae-pytz library zip'
 subprocess.call(['rm', '-f', PYTZ_FILENAME])
+
+print '=' * 60
+
+print 'Downloading icalendar library'
+subprocess.call(['wget', ICALENDAR_ZIP])
+print 'Unzipping icalendar library'
+subprocess.call(['unzip', '-oq', ICALENDAR_FILENAME])
+
+print 'Removing existing icalendar code'
+subprocess.call(['rm', '-fr', ICALENDAR_CODE_DIR])
+
+print 'Moving library to project root'
+subprocess.call(['mv', ICALENDAR_SUBDIR, GIT_ROOT])
+print 'Removing icalendar unused files'
+subprocess.call(['rm', '-fr', ICALENDAR_MAINDIR])
+print 'Removing icalendar library zip'
+subprocess.call(['rm', '-f', ICALENDAR_FILENAME])

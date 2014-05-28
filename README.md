@@ -53,6 +53,9 @@ for more information
 - The version of `gae-pytz` in `setup_dependcies.py` reflects the
   "latest" from [PyPI][9].
 
+- The version of `icalendar` in `setup_dependcies.py` reflects the
+  "latest" from [PyPI][10].
+
 **NOTE**: Repository was previously [hosted][4] on Google Code Hosting.
 
 [1]: http://code.google.com/p/google-api-python-client/wiki/GoogleAppEngine
@@ -64,3 +67,4 @@ for more information
 [7]: http://en.wikipedia.org/wiki/ICalendar
 [8]: https://developers.google.com/api-client-library/python/start/installation#appengine
 [9]: https://pypi.python.org/pypi/gaepytz
+[10]: https://pypi.python.org/pypi/icalendar

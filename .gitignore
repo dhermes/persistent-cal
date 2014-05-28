@@ -8,3 +8,4 @@ httplib2/
 oauth2client/
 uritemplate/
 pytz/
+icalendar/
