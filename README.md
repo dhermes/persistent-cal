@@ -1,6 +1,6 @@
 ### Description
 
-This repository contains server and client code for 
+This repository contains server and client code for
 the `persistent-cal` [App Engine][6] application.
 
 The application enables persistent import of an [iCalendar][7] feed into a
@@ -28,12 +28,12 @@ for more information
 
   url = 'http://persistent-cal.appspot.com/cron-weekly'
   result = urlfetch.fetch(
-      url=url, method=urlfetch.GET, 
+      url=url, method=urlfetch.GET,
       headers={'Cookie': cookie_header, 'X-AppEngine-Cron': 'true'})
 
   url = 'http://persistent-cal.appspot.com/cron-monthly'
   result = urlfetch.fetch(
-      url=url, method=urlfetch.GET, 
+      url=url, method=urlfetch.GET,
       headers={'Cookie': cookie_header, 'X-AppEngine-Cron': 'true'})
   ```
 
@@ -46,6 +46,10 @@ for more information
   --rcfile=pylintrc library.py
   ```
 
+- To add `google-api-python-client`, run `setup_dependencies.py`. This
+  file will reflect the "latest" instructions from the client
+  library [documentation][8].
+
 **NOTE**: Repository was previously [hosted][4] on Google Code Hosting.
 
 [1]: http://code.google.com/p/google-api-python-client/wiki/GoogleAppEngine
@@ -55,3 +59,4 @@ for more information
 [5]: https://www.tripit.com/
 [6]: https://cloud.google.com/products/app-engine/
 [7]: http://en.wikipedia.org/wiki/ICalendar
+[8]: https://developers.google.com/api-client-library/python/start/installation#appengine

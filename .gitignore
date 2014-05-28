@@ -3,3 +3,7 @@
 #*
 *.pyc
 persistent-cal
+apiclient/
+httplib2/
+oauth2client/
+uritemplate/
