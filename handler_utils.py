@@ -26,6 +26,7 @@ import functools
 import logging
 import sys
 import traceback
+import types
 
 # App engine specific libraries
 from google.appengine.api import mail
@@ -134,6 +135,29 @@ class DeadlineDecorator(object):
     """
     self.method = method
 
+  def __get__(self, instance, cls):
+    """Descriptor to make this callable bind to a handler.
+
+    Args:
+      instance: A (likely Handler) object which owns this callable.
+      cls: The (unused) class of `instance`.
+
+    See:
+      http://stackoverflow.com/a/10421444/1068170
+      http://stackoverflow.com/a/12505646/1068170
+      https://docs.python.org/2/howto/descriptor.html
+
+    Returns:
+      Bound `instancemethod` object which both calls this method and
+          is bound to another instance.
+    """
+    return types.MethodType(self, instance, cls)
+
+  @property
+  def __name__(self):
+    """Pretty name property for binding to objects as a methods."""
+    return self.__class__.__name__ + '_instance'
+
   def __call__(self, req_self, *args, **kwargs):  # pylint:disable-msg=W0142
     """Enhanced call to method stored on decorator class.
 
@@ -193,7 +217,10 @@ class ExtendedHandler(webapp2.RequestHandler):
 
     for verb in verbs:
       method = getattr(cls, verb, None)
-      if callable(method) and not isinstance(method, DeadlineDecorator):
+      # We only re-bind the methods that are `instancemethod`s and have
+      # not already been wrapped.
+      if (isinstance(method, types.MethodType) and
+          not isinstance(method.im_func, DeadlineDecorator)):
         setattr(cls, verb, DeadlineDecorator(method))
 
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
