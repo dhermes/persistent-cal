@@ -182,7 +182,7 @@ class DeadlineDecorator(object):
             urlfetch_errors.DeadlineExceededError):
       # pylint:disable-msg=W0142
       traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
-      logging.exception(traceback_info)
+      traceback.print_exc()
       EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
 
       req_self.response.clear()
@@ -249,7 +249,7 @@ class ExtendedHandler(webapp2.RequestHandler):
       debug_mode: True if the web application is running in debug mode
     """
     traceback_info = ''.join(traceback.format_exception(*sys.exc_info()))
-    logging.exception(traceback_info)
+    traceback.print_exc()
     EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
 
     self.response.clear()
