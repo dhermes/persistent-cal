@@ -113,7 +113,7 @@ def EmailAdmins(error_msg):
                  subject=subject, body=body)
 
 
-def DeadlineDecorator(method):
+class DeadlineDecorator(object):
   """Decorator for HTTP verbs to handle GAE timeout.
 
   Args:
@@ -125,16 +125,29 @@ def DeadlineDecorator(method):
         and responds to them gracefully
   """
 
-  def WrappedMethod(self, *args, **kwargs):  # pylint:disable-msg=W0142
-    """Returned function that uses method from outside scope.
+  def __init__(self, method):
+    """Constructor for DeadlineDecorator.
+
+    Args:
+      method: a callable object, expected to be a method of an object from
+          a class that inherits from webapp.RequestHandler
+    """
+    self.method = method
+
+  def __call__(self, req_self, *args, **kwargs):  # pylint:disable-msg=W0142
+    """Enhanced call to method stored on decorator class.
 
     Tries to execute the method with the arguments. If either a
     PermanentTaskFailure is thrown (from deferred library) or if one of the two
     DeadlineExceededError's is thrown (inherits directly from BaseException)
     administrators are emailed and then cleanup occurs.
+
+    Args:
+      req_self: The object to be passed to self.method. Expect it to be an
+           instance of a descendant of webapp.RequestHandler.
     """
     try:
-      method(self, *args, **kwargs)
+      self.method(req_self, *args, **kwargs)
     except PermanentTaskFailure:
       # In this case, the function can't be run, so we alert but do not
       # raise the error, returning a 200 status code, hence killing the task.
@@ -148,11 +161,9 @@ def DeadlineDecorator(method):
       logging.exception(traceback_info)
       EmailAdmins(traceback_info, defer_now=True)  # pylint:disable-msg=E1123
 
-      self.response.clear()
-      self.response.set_status(500)
-      self.response.out.write(RENDERED_500_PAGE)
-
-  return WrappedMethod
+      req_self.response.clear()
+      req_self.response.set_status(500)
+      req_self.response.out.write(RENDERED_500_PAGE)
 
 
 class ExtendedHandler(webapp2.RequestHandler):
@@ -182,7 +193,7 @@ class ExtendedHandler(webapp2.RequestHandler):
 
     for verb in verbs:
       method = getattr(cls, verb, None)
-      if callable(method):
+      if callable(method) and not isinstance(method, DeadlineDecorator):
         setattr(cls, verb, DeadlineDecorator(method))
 
     return super(ExtendedHandler, cls).__new__(cls, *args, **kwargs)
