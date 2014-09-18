@@ -99,7 +99,7 @@ def WhiteList(link):
     valid = True
 
     protocol = tripit_match.group('protocol')
-    transformed = 'http://{}'.format(link[len(protocol):])
+    transformed = 'https://{}'.format(link[len(protocol):])
 
   return valid, transformed
 
@@ -295,6 +295,15 @@ def UpdateSubscription(link, current_user, credentials=None, start_uid=None):
   now = datetime.datetime.utcnow()
 
   import_feed = urlfetch.fetch(link, deadline=60)
+
+  # In the case of failure, do nothing and notify Admin.
+  if import_feed.status_code != 200:
+    error_msg = '{} resulted in non-200 status code: {:d}'.format(
+        link, import_feed.status_code)
+    logging.debug(error_msg)
+    EmailAdmins(error_msg, defer_now=True)  # pylint:disable-msg=E1123
+    return
+
   ical = Calendar.from_ical(import_feed.content)
 
   start_index = 0
