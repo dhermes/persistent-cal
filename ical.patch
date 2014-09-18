@@ -1,0 +1,260 @@
+diff --git a/icalendar/compat.py b/icalendar/compat.py
+deleted file mode 100644
+index 4704a14..0000000
+--- a/icalendar/compat.py
++++ /dev/null
+@@ -1,11 +0,0 @@
+-import sys
+-
+-
+-if sys.version_info[0] == 2:  # pragma: no cover
+-    unicode_type = unicode
+-    bytes_type = str
+-    iteritems = lambda d, *args, **kwargs: iter(d.iteritems(*args, **kwargs))
+-else:  # pragma: no cover
+-    unicode_type = str
+-    bytes_type = bytes
+-    iteritems = lambda d, *args, **kwargs: iter(d.items(*args, **kwargs))
+diff --git a/icalendar/ical_compat.py b/icalendar/ical_compat.py
+new file mode 100644
+index 0000000..4704a14
+--- /dev/null
++++ b/icalendar/ical_compat.py
+@@ -0,0 +1,11 @@
++import sys
++
++
++if sys.version_info[0] == 2:  # pragma: no cover
++    unicode_type = unicode
++    bytes_type = str
++    iteritems = lambda d, *args, **kwargs: iter(d.iteritems(*args, **kwargs))
++else:  # pragma: no cover
++    unicode_type = str
++    bytes_type = bytes
++    iteritems = lambda d, *args, **kwargs: iter(d.items(*args, **kwargs))
+diff --git a/icalendar/parser.py b/icalendar/parser.py
+index 7f57db2..3cc4475 100644
+--- a/icalendar/parser.py
++++ b/icalendar/parser.py
+@@ -6,7 +6,7 @@ Eg. RFC 2426 (vCard)
+ It is stupid in the sense that it treats the content purely as strings. No type
+ conversion is attempted.
+ """
+-from icalendar import compat
++from icalendar import ical_compat
+ from icalendar.caselessdict import CaselessDict
+ from icalendar.parser_tools import DEFAULT_ENCODING
+ from icalendar.parser_tools import SEQUENCE_TYPES
+@@ -19,7 +19,7 @@ import re
+ def escape_char(text):
+     """Format value according to iCalendar TEXT escaping rules.
+     """
+-    assert isinstance(text, (compat.unicode_type, compat.bytes_type))
++    assert isinstance(text, (ical_compat.unicode_type, ical_compat.bytes_type))
+     # NOTE: ORDER MATTERS!
+     return text.replace(r'\N', '\n')\
+                .replace('\\', '\\\\')\
+@@ -30,16 +30,16 @@ def escape_char(text):
+ 
+ 
+ def unescape_char(text):
+-    assert isinstance(text, (compat.unicode_type, compat.bytes_type))
++    assert isinstance(text, (ical_compat.unicode_type, ical_compat.bytes_type))
+     # NOTE: ORDER MATTERS!
+-    if isinstance(text, compat.unicode_type):
++    if isinstance(text, ical_compat.unicode_type):
+         return text.replace(u'\\N', u'\\n')\
+                    .replace(u'\r\n', u'\n')\
+                    .replace(u'\\n', u'\n')\
+                    .replace(u'\\,', u',')\
+                    .replace(u'\\;', u';')\
+                    .replace(u'\\\\', u'\\')
+-    elif isinstance(text, compat.bytes_type):
++    elif isinstance(text, ical_compat.bytes_type):
+         return text.replace(b'\N', b'\n')\
+                    .replace(b'\r\n', b'\n')\
+                    .replace(b'\n', b'\n')\
+@@ -70,7 +70,7 @@ def foldline(line, limit=75, fold_sep=u'\r\n '):
+     immediately followed by a single linear white-space character (i.e.,
+     SPACE or HTAB).
+     """
+-    assert isinstance(line, compat.unicode_type)
++    assert isinstance(line, ical_compat.unicode_type)
+     assert u'\n' not in line
+ 
+     ret_line = u''
+@@ -199,7 +199,7 @@ class Parameters(CaselessDict):
+         items = self.items()
+         for key, value in sorted(items):
+             value = param_value(value)
+-            if isinstance(value, compat.unicode_type):
++            if isinstance(value, ical_compat.unicode_type):
+                 value = value.encode(DEFAULT_ENCODING)
+             # CaselessDict keys are always unicode
+             key = key.upper().encode(DEFAULT_ENCODING)
+@@ -257,7 +257,7 @@ def unsescape_string(val):
+ #########################################
+ # parsing and generation of content lines
+ 
+-class Contentline(compat.unicode_type):
++class Contentline(ical_compat.unicode_type):
+     """A content line is basically a string that can be folded and parsed into
+     parts.
+     """
+@@ -316,7 +316,7 @@ class Contentline(compat.unicode_type):
+                                           strict=self.strict)
+             params = Parameters(
+                 (unsescape_string(key), unsescape_string(value))
+-                for key, value in compat.iteritems(params)
++                for key, value in ical_compat.iteritems(params)
+             )
+             values = unsescape_string(st[value_split + 1:])
+             return (name, params, values)
+diff --git a/icalendar/parser_tools.py b/icalendar/parser_tools.py
+index 1e0dade..184147f 100644
+--- a/icalendar/parser_tools.py
++++ b/icalendar/parser_tools.py
+@@ -1,4 +1,4 @@
+-from icalendar import compat
++from icalendar import ical_compat
+ 
+ 
+ SEQUENCE_TYPES = (list, tuple)
+@@ -8,9 +8,9 @@ DEFAULT_ENCODING = 'utf-8'
+ def to_unicode(value, encoding='utf-8'):
+     """Converts a value to unicode, even if it is already a unicode string.
+     """
+-    if isinstance(value, compat.unicode_type):
++    if isinstance(value, ical_compat.unicode_type):
+         return value
+-    elif isinstance(value, compat.bytes_type):
++    elif isinstance(value, ical_compat.bytes_type):
+         try:
+             value = value.decode(encoding)
+         except UnicodeDecodeError:
+@@ -23,10 +23,10 @@ def data_encode(data, encoding=DEFAULT_ENCODING):
+     Currently unicode strings, dicts and lists are supported.
+     """
+     # http://stackoverflow.com/questions/1254454/fastest-way-to-convert-a-dicts-keys-values-from-unicode-to-str
+-    if isinstance(data, compat.unicode_type):
++    if isinstance(data, ical_compat.unicode_type):
+         return data.encode(encoding)
+     elif isinstance(data, dict):
+-        return dict(map(data_encode, compat.iteritems(data)))
++        return dict(map(data_encode, ical_compat.iteritems(data)))
+     elif isinstance(data, list) or isinstance(data, tuple):
+         return list(map(data_encode, data))
+     else:
+diff --git a/icalendar/prop.py b/icalendar/prop.py
+index 8a3429d..5af5bd7 100644
+--- a/icalendar/prop.py
++++ b/icalendar/prop.py
+@@ -40,8 +40,7 @@ from datetime import datetime
+ from datetime import time
+ from datetime import timedelta
+ from datetime import tzinfo
+-from dateutil.tz import tzutc
+-from icalendar import compat
++from icalendar import ical_compat
+ from icalendar.caselessdict import CaselessDict
+ from icalendar.parser import Parameters
+ from icalendar.parser import escape_char
+@@ -171,7 +170,7 @@ class vBoolean(int):
+             raise ValueError("Expected 'TRUE' or 'FALSE'. Got %s" % ical)
+ 
+ 
+-class vCalAddress(compat.unicode_type):
++class vCalAddress(ical_compat.unicode_type):
+     """This just returns an unquoted string.
+     """
+     def __new__(cls, value, encoding=DEFAULT_ENCODING):
+@@ -200,7 +199,7 @@ class vFloat(float):
+         return self
+ 
+     def to_ical(self):
+-        return compat.unicode_type(self).encode('utf-8')
++        return ical_compat.unicode_type(self).encode('utf-8')
+ 
+     @classmethod
+     def from_ical(cls, ical):
+@@ -219,7 +218,7 @@ class vInt(int):
+         return self
+ 
+     def to_ical(self):
+-        return compat.unicode_type(self).encode('utf-8')
++        return ical_compat.unicode_type(self).encode('utf-8')
+ 
+     @classmethod
+     def from_ical(cls, ical):
+@@ -279,7 +278,7 @@ class vDDDTypes(object):
+         if (isinstance(dt, datetime) or isinstance(dt, time))\
+                 and getattr(dt, 'tzinfo', False):
+             tzinfo = dt.tzinfo
+-            if tzinfo is not pytz.utc and not isinstance(tzinfo, tzutc):
++            if tzinfo is not pytz.utc:
+                 # set the timezone as a parameter to the property
+                 tzid = tzid_from_dt(dt)
+                 if tzid:
+@@ -433,12 +432,12 @@ class vDuration(object):
+             if seconds:
+                 timepart += "%dS" % seconds
+         if self.td.days == 0 and timepart:
+-            return (compat.unicode_type(sign).encode('utf-8') + b'P' +
+-                    compat.unicode_type(timepart).encode('utf-8'))
++            return (ical_compat.unicode_type(sign).encode('utf-8') + b'P' +
++                    ical_compat.unicode_type(timepart).encode('utf-8'))
+         else:
+-            return (compat.unicode_type(sign).encode('utf-8') + b'P' +
+-                    compat.unicode_type(abs(self.td.days)).encode('utf-8') +
+-                    b'D' + compat.unicode_type(timepart).encode('utf-8'))
++            return (ical_compat.unicode_type(sign).encode('utf-8') + b'P' +
++                    ical_compat.unicode_type(abs(self.td.days)).encode('utf-8') +
++                    b'D' + ical_compat.unicode_type(timepart).encode('utf-8'))
+ 
+     @staticmethod
+     def from_ical(ical):
+@@ -531,7 +530,7 @@ class vPeriod(object):
+         return 'vPeriod(%r)' % p
+ 
+ 
+-class vWeekday(compat.unicode_type):
++class vWeekday(ical_compat.unicode_type):
+     """This returns an unquoted weekday abbrevation.
+     """
+     week_days = CaselessDict({
+@@ -565,7 +564,7 @@ class vWeekday(compat.unicode_type):
+             raise ValueError('Expected weekday abbrevation, got: %s' % ical)
+ 
+ 
+-class vFrequency(compat.unicode_type):
++class vFrequency(ical_compat.unicode_type):
+     """A simple class that catches illegal values.
+     """
+ 
+@@ -666,7 +665,7 @@ class vRecur(CaselessDict):
+             raise ValueError('Error in recurrence rule: %s' % ical)
+ 
+ 
+-class vText(compat.unicode_type):
++class vText(ical_compat.unicode_type):
+     """Simple text.
+     """
+ 
+@@ -715,7 +714,7 @@ class vTime(object):
+             raise ValueError('Expected time, got: %s' % ical)
+ 
+ 
+-class vUri(compat.unicode_type):
++class vUri(ical_compat.unicode_type):
+     """Uniform resource identifier is basically just an unquoted string.
+     """
+ 
+@@ -815,7 +814,7 @@ class vUTCOffset(object):
+         return offset
+ 
+ 
+-class vInline(compat.unicode_type):
++class vInline(ical_compat.unicode_type):
+     """This is an especially dumb class that just holds raw unparsed text and
+     has parameters. Conversion of inline values are handled by the Component
+     class, so no further processing is needed.

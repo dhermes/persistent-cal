@@ -84,3 +84,8 @@ print 'Removing icalendar unused files'
 subprocess.call(['rm', '-fr', ICALENDAR_MAINDIR])
 print 'Removing icalendar library zip'
 subprocess.call(['rm', '-f', ICALENDAR_FILENAME])
+
+print '=' * 60
+
+print 'Updating iCal with App Engine specific hacks'
+subprocess.call(['git', 'apply', 'ical.patch'])
