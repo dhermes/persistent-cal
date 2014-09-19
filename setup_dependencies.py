@@ -3,6 +3,19 @@ import subprocess
 import sys
 
 
+LIB_DIRS = ('apiclient', 'httplib2', 'oauth2client', 'uritemplate',
+            'pytz', 'icalendar')
+directory_missing = False
+for directory in LIB_DIRS:
+  if not os.path.isdir(directory):
+    directory_missing = True
+    break
+
+if not directory_missing:
+  print 'All dependencies already downloaded. Doing nothing and exiting.'
+  sys.exit(0)
+
+
 GOOGLE_API_CLIENT_ZIP = ('https://google-api-python-client.googlecode.com'
                          '/files/google-api-python-client-gae-1.2.zip')
 GOOGLE_API_CLIENT_FILENAME = os.path.split(GOOGLE_API_CLIENT_ZIP)[-1]
