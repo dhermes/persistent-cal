@@ -1,16 +1,3 @@
-diff --git a/icalendar/cal.py b/icalendar/cal.py
-index 6265265..bf10973 100644
---- a/icalendar/cal.py
-+++ b/icalendar/cal.py
-@@ -295,6 +295,8 @@ class Component(CaselessDict):
-         """
-         stack = []  # a stack of components
-         comps = []
-+        if st.count('\r\\n') > 0:  # TEMP DJH EDIT.
-+            st = st.replace('\r\\n', '\\, \r\n ')  # TEMP DJH EDIT.
-         for line in Contentlines.from_ical(st):  # raw parsing
-             if not line:
-                 continue
 diff --git a/icalendar/compat.py b/icalendar/compat.py
 deleted file mode 100644
 index 4704a14..0000000
