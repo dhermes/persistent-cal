@@ -18,7 +18,7 @@
 """Handler utility library for persistent-cal."""
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General libraries

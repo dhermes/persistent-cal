@@ -1,5 +1,5 @@
 application: persistent-cal
-version: 0-12
+version: 0-13
 runtime: python27
 api_version: 1  # only existing version
 threadsafe: true  # for python27

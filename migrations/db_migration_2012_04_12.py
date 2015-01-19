@@ -28,7 +28,7 @@ s~persistent-cal> UpdateEvents()
 """
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 from models import Event
@@ -44,4 +44,3 @@ def UpdateEvents():
                       end_date=event.end_date,
                       gcal_edit=event.gcal_edit)
     new_event.put()
-

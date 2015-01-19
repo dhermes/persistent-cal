@@ -18,7 +18,7 @@
 """Exceptions module for persistent-cal."""
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 class Error(Exception):

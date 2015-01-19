@@ -18,7 +18,7 @@
 """Handler for cron update requests made from persistent-cal."""
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General libraries

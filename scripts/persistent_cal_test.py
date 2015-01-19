@@ -18,7 +18,7 @@
 """Test persistent-cal CLI tool."""
 
 
-__author__ = 'dhermes@google.com (Dan Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Dan Hermes)'
 
 
 # General libraries

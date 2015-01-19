@@ -18,7 +18,7 @@
 """Extended function library for request handlers for persistent-cal."""
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General libraries

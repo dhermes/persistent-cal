@@ -18,7 +18,7 @@
 """Debugging tool to get current state of main calendar."""
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General libraries
@@ -94,6 +94,7 @@ def main():
 
   with open('curr_state_cal.json', 'wb') as fh:
     json.dump(result, fh)
+
 
 if __name__ == '__main__':
   main()

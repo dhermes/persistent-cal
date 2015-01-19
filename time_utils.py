@@ -21,7 +21,7 @@ Provides time related parsing and conversion functions.
 """
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General libraries

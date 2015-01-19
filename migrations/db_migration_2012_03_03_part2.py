@@ -34,7 +34,7 @@ Note:
 """
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 # General imports
@@ -71,4 +71,3 @@ def UpdateEvents():
       event.put()
     except HttpError as e:
       print('%s failed with: %s %s' % (event_id, type(e), e))
-

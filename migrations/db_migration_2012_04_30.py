@@ -28,7 +28,7 @@ s~persistent-cal> UpdateEvents()
 """
 
 
-__author__ = 'dhermes@google.com (Daniel Hermes)'
+__author__ = 'daniel.j.hermes@gmail.com (Daniel Hermes)'
 
 
 from models import Event
