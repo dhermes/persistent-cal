@@ -91,6 +91,11 @@ def WhiteList(link):
   # If WhiteList is updated, event parsing must be as well
   valid = False
   transformed = link
+  # In rare cases of `ndb` failure, the `link` retrieved from the
+  # datastore will not be the property type (string) and will instead
+  # be _BaseValue.
+  if isinstance(transformed, ndb.model._BaseValue):
+    transformed = transformed.b_val
 
   pattern_tripit = ('^(?P<protocol>(http|https|webcal)://|)www.tripit.com/feed/'
                     'ical/private/[A-Za-z0-9-]+/tripit.ics$')
